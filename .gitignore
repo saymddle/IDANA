@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# Claude Code session files
+.claude/
+
+# Copyrighted source material
+*.pdf
