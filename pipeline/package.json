@@ -1,0 +1,1 @@
+{"name":"idana-pipeline","version":"1.0.0","type":"module","private":true,"dependencies":{"@anthropic-ai/sdk":"^0.95.1","neo4j-driver":"^6.0.1"}}
