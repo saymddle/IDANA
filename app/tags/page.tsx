@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
+import { Icon } from '@/components/Icons'
 
 const PairingGraph = dynamic(() => import('@/components/PairingGraph'), { ssr: false })
 
@@ -77,39 +78,38 @@ export default function TagsPage() {
           <button
             onClick={closeExplorer}
             style={{
-              background: 'none', border: '1px solid var(--line)', borderRadius: 999,
-              color: 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+              background: 'none', border: '1px solid var(--line-strong)', borderRadius: 999,
+              color: 'var(--ink-soft)', cursor: 'pointer', fontSize: 13, fontWeight: 500,
               padding: '7px 14px', fontFamily: 'inherit',
               display: 'flex', alignItems: 'center', gap: 5,
             }}
           >
-            ← Back to results
+            <Icon.ArrowLeft size={14} stroke="var(--ink-soft)" /> Back to results
           </button>
           <div>
             <p className="eyebrow" style={{ marginBottom: 2 }}>Pairing Explorer</p>
-            <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 24, fontWeight: 700, color: 'var(--ink)', margin: 0 }}>
+            <h2 style={{ fontFamily: 'var(--serif)', fontSize: 24, fontWeight: 400, color: 'var(--ink)', margin: 0 }}>
               {explorerIngredient}
             </h2>
           </div>
-          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
-            {selectedTags.map(tag => {
-              const cat = Object.entries(TAG_LIBRARY).find(([, tags]) => tags.includes(tag))?.[0]
-              const color = cat ? CATEGORY_COLORS[cat] : 'var(--ink-4)'
-              return (
-                <span key={tag} style={{
-                  padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600,
-                  background: `${color}18`, color, border: `1px solid ${color}40`,
-                }}>
-                  {tag}
-                </span>
-              )
-            })}
-          </div>
+          {selectedTags.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
+              {selectedTags.map(tag => {
+                const cat = Object.entries(TAG_LIBRARY).find(([, tags]) => tags.includes(tag))?.[0]
+                const color = cat ? CATEGORY_COLORS[cat] : 'var(--muted)'
+                return (
+                  <span key={tag} className="chip" style={{ height: 26, fontSize: 11, color, borderColor: `${color}40`, background: `${color}18` }}>
+                    {tag}
+                  </span>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         <div style={{ flex: 1, overflow: 'hidden' }}>
           {explorerLoading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10, color: 'var(--ink-3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10, color: 'var(--muted)' }}>
               <div style={{ width: 18, height: 18, border: '2px solid var(--line)', borderTopColor: 'var(--green)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
               <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
               Loading pairings...
@@ -127,155 +127,141 @@ export default function TagsPage() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: 'var(--bg)', overflow: 'hidden' }}>
+    <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '32px 36px 80px' }}>
 
-      {/* Left: tag browser */}
-      <div style={{ width: 280, flexShrink: 0, borderRight: '1px solid var(--line)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '24px 20px 14px', borderBottom: '1px solid var(--line)' }}>
-          <p className="eyebrow" style={{ marginBottom: 6 }}>Flavor Tags</p>
-          <h1 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 22, fontWeight: 700, color: 'var(--ink)', margin: 0 }}>
-            Browse by Flavor
-          </h1>
+      {/* Header */}
+      <div style={{ marginBottom: 32 }}>
+        <p className="eyebrow" style={{ marginBottom: 8 }}>Library</p>
+        <h1 className="h-section" style={{ marginBottom: 8 }}>Browse by flavor</h1>
+        <p className="body-sm">Select flavor tags to find matching ingredients. Multi-select narrows results.</p>
+      </div>
+
+      {/* Active tags summary */}
+      {selectedTags.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          padding: '12px 16px', marginBottom: 24,
+          background: 'var(--tier-strong-tint-soft)',
+          border: '1px solid var(--tier-strong-tint)',
+          borderRadius: 14,
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--green)', flexShrink: 0 }}>
+            Filtering by
+          </span>
+          {selectedTags.map(tag => (
+            <button key={tag} onClick={() => toggleTag(tag)} className="chip is-active" style={{ height: 26, fontSize: 11 }}>
+              {tag} <Icon.Close size={10} stroke="#FBF8F2" />
+            </button>
+          ))}
+          <button onClick={() => { setSelectedTags([]); setResults([]); setHasSearched(false) }}
+            style={{ background: 'none', border: 'none', color: 'var(--tier-twist)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto' }}
+          >
+            Clear all
+          </button>
         </div>
+      )}
 
-        {selectedTags.length > 0 && (
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)', background: 'var(--surface-2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-4)' }}>Active</span>
-              <button onClick={() => { setSelectedTags([]); setResults([]); setHasSearched(false) }} style={{ background: 'none', border: 'none', color: 'var(--coral)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
-                Clear
-              </button>
+      {/* Tag groups */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 28, marginBottom: 40 }}>
+        {Object.entries(TAG_LIBRARY).map(([category, tags]) => {
+          const color = CATEGORY_COLORS[category]
+          const activeInCat = tags.filter(t => selectedTags.includes(t)).length
+          return (
+            <div key={category}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <span className="eyebrow" style={{ color, flexShrink: 0 }}>{category}</span>
+                <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
+                {activeInCat > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 600, color, flexShrink: 0 }}>{activeInCat} active</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {tags.map(tag => {
+                  const active = selectedTags.includes(tag)
+                  return (
+                    <button key={tag} onClick={() => toggleTag(tag)}
+                      className={`chip ${active ? 'is-active' : 'is-soft'}`}
+                      style={{ cursor: 'pointer', ...(active ? {} : { borderColor: `${color}30`, color }) }}
+                    >
+                      {tag}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-              {selectedTags.map(tag => (
-                <span key={tag} onClick={() => toggleTag(tag)} style={{
-                  padding: '3px 10px', borderRadius: 999, background: 'var(--green)', color: '#FBF7F0',
-                  fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 4,
-                }}>
-                  {tag} <span style={{ opacity: 0.8 }}>×</span>
-                </span>
-              ))}
-            </div>
+          )
+        })}
+      </div>
+
+      {/* Results */}
+      {searching && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--muted)', paddingTop: 20 }}>
+          <div style={{ width: 16, height: 16, border: '2px solid var(--line)', borderTopColor: 'var(--green)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          Searching...
+        </div>
+      )}
+
+      {hasSearched && !searching && results.length === 0 && (
+        <div style={{ paddingTop: 20, textAlign: 'center' }}>
+          <h3 style={{ fontFamily: 'var(--serif)', fontSize: 20, fontWeight: 400, color: 'var(--ink)', marginBottom: 8 }}>
+            No ingredients found
+          </h3>
+          <p className="body-sm">Try fewer or different tags.</p>
+        </div>
+      )}
+
+      {results.length > 0 && !searching && (
+        <>
+          <div style={{ marginBottom: 18 }}>
+            <p className="eyebrow" style={{ marginBottom: 4 }}>Results</p>
+            <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 400, fontSize: 26, color: 'var(--ink)', margin: '0 0 4px' }}>
+              {results.length.toLocaleString()} ingredient{results.length !== 1 ? 's' : ''}
+            </h2>
+            <p className="body-sm">Tagged: {selectedTags.join(' · ')}</p>
           </div>
-        )}
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px' }}>
-          {Object.entries(TAG_LIBRARY).map(([category, tags]) => {
-            const color = CATEGORY_COLORS[category]
-            return (
-              <div key={category} style={{ marginBottom: 20 }}>
-                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color, marginBottom: 8 }}>
-                  {category}
-                </p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {tags.map(tag => {
-                    const active = selectedTags.includes(tag)
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+            {results.map(ing => (
+              <button
+                key={ing.name}
+                onClick={() => openExplorer(ing.name)}
+                style={{
+                  textAlign: 'left', padding: '14px 16px',
+                  background: 'var(--card)', border: '1px solid var(--line)',
+                  borderRadius: 16, cursor: 'pointer', width: '100%',
+                  boxShadow: 'var(--shadow-1)', transition: 'transform 0.15s, box-shadow 0.15s',
+                }}
+                onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = 'var(--shadow-2)' }}
+                onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = ''; el.style.boxShadow = 'var(--shadow-1)' }}
+              >
+                <h3 style={{ fontFamily: 'var(--serif)', fontSize: 15, fontWeight: 400, color: 'var(--ink)', margin: '0 0 8px' }}>
+                  {ing.name}
+                </h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                  {ing.tags.slice(0, 4).map(tag => {
+                    const isActive = selectedTags.includes(tag)
+                    const cat = Object.entries(TAG_LIBRARY).find(([, tags]) => tags.includes(tag))?.[0]
+                    const color = cat ? CATEGORY_COLORS[cat] : 'var(--muted)'
                     return (
-                      <button key={tag} onClick={() => toggleTag(tag)} style={{
-                        padding: '5px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
-                        border: `1px solid ${active ? color : 'var(--line)'}`,
-                        background: active ? `${color}18` : 'transparent',
-                        color: active ? color : 'var(--ink-3)',
-                        fontSize: 12, fontWeight: active ? 700 : 400, transition: 'all 0.13s',
+                      <span key={tag} className="chip" style={{
+                        height: 22, fontSize: 10, padding: '0 8px',
+                        background: isActive ? `${color}18` : 'var(--card-soft)',
+                        color: isActive ? color : 'var(--muted)',
+                        borderColor: isActive ? `${color}40` : 'var(--line)',
                       }}>
                         {tag}
-                      </button>
+                      </span>
                     )
                   })}
                 </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Right: results */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '28px 36px' }}>
-        {!hasSearched && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 14, textAlign: 'center' }}>
-            <span style={{ fontSize: 48 }}>🏷️</span>
-            <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 24, fontWeight: 700, color: 'var(--ink)', margin: 0 }}>
-              Select flavor tags
-            </h2>
-            <p style={{ color: 'var(--ink-4)', fontSize: 14, maxWidth: 280, lineHeight: 1.6, margin: 0 }}>
-              Pick tags to find ingredients with those flavor characteristics. Multi-select narrows results.
-            </p>
+                <p style={{ fontSize: 11, color: 'var(--green)', fontWeight: 500, margin: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  Explore pairings <Icon.ChevronRight size={12} stroke="var(--green)" />
+                </p>
+              </button>
+            ))}
           </div>
-        )}
-
-        {searching && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ink-3)', paddingTop: 40 }}>
-            <div style={{ width: 16, height: 16, border: '2px solid var(--line)', borderTopColor: 'var(--green)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-            Searching...
-          </div>
-        )}
-
-        {hasSearched && !searching && results.length === 0 && (
-          <div style={{ paddingTop: 40, textAlign: 'center' }}>
-            <p style={{ fontSize: 32, marginBottom: 12 }}>🔎</p>
-            <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 20, fontWeight: 700, color: 'var(--ink)', marginBottom: 8 }}>
-              No ingredients found
-            </h3>
-            <p style={{ color: 'var(--ink-4)', fontSize: 14 }}>Try fewer tags.</p>
-          </div>
-        )}
-
-        {results.length > 0 && !searching && (
-          <>
-            <div style={{ marginBottom: 20 }}>
-              <p className="eyebrow" style={{ marginBottom: 4 }}>Results</p>
-              <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 28, fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px' }}>
-                {results.length.toLocaleString()} ingredient{results.length !== 1 ? 's' : ''}
-              </h2>
-              <p style={{ fontSize: 13, color: 'var(--ink-4)', margin: 0 }}>
-                Tagged: {selectedTags.join(' · ')}
-              </p>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-              {results.map(ing => (
-                <button
-                  key={ing.name}
-                  onClick={() => openExplorer(ing.name)}
-                  style={{
-                    textAlign: 'left', padding: '14px 16px',
-                    background: 'var(--surface)', border: '1px solid var(--line)',
-                    borderRadius: 14, cursor: 'pointer', width: '100%',
-                    boxShadow: 'var(--soft-shadow)', transition: 'transform 0.15s, box-shadow 0.15s',
-                  }}
-                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = '0 6px 24px rgba(60,40,20,0.08)' }}
-                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = ''; el.style.boxShadow = 'var(--soft-shadow)' }}
-                >
-                  <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 15, fontWeight: 700, color: 'var(--ink)', margin: '0 0 8px' }}>
-                    {ing.name}
-                  </h3>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
-                    {ing.tags.slice(0, 4).map(tag => {
-                      const isActive = selectedTags.includes(tag)
-                      const cat = Object.entries(TAG_LIBRARY).find(([, tags]) => tags.includes(tag))?.[0]
-                      const color = cat ? CATEGORY_COLORS[cat] : 'var(--ink-4)'
-                      return (
-                        <span key={tag} style={{
-                          padding: '2px 7px', borderRadius: 999, fontSize: 10, fontWeight: isActive ? 700 : 500,
-                          background: isActive ? `${color}18` : 'var(--surface-2)',
-                          color: isActive ? color : 'var(--ink-4)',
-                          border: `1px solid ${isActive ? `${color}40` : 'var(--line)'}`,
-                        }}>
-                          {tag}
-                        </span>
-                      )
-                    })}
-                  </div>
-                  <p style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600, margin: 0 }}>
-                    Explore pairings →
-                  </p>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
+        </>
+      )}
     </div>
   )
 }

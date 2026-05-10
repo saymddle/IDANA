@@ -189,7 +189,7 @@ export default function SessionPage() {
           </p>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
 
           {/* Hub ingredients */}
           <div style={{ marginBottom: 20 }}>

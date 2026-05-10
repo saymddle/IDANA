@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import NewSessionModal from '@/components/NewSessionModal'
+import { Icon, FoodArt, FoodArtProps } from '@/components/Icons'
 
 interface Session {
   id: string; name: string; status: string
@@ -12,6 +13,25 @@ interface Session {
 interface SessionTag { session_id: string; tag_name: string }
 
 const QUICK_TAGS = ['Umami', 'Smoky', 'Rich', 'Bright', 'Spicy', 'Sweet', 'Savory', 'Earthy', 'Bold']
+
+const PALETTES: FoodArtProps['palette'][] = [
+  ['#3D2C1F', '#6B4A2B', '#A77B4E', '#1C1C1A'],
+  ['#E8E1C9', '#C5D4A4', '#FAF7EE', '#7C8C5B'],
+  ['#8B3A1F', '#D4A24C', '#C16E2D', '#3A1F12'],
+  ['#F2DC8E', '#E8B746', '#FBF5DA', '#A07924'],
+  ['#2A2326', '#5C4A56', '#D4C5C2', '#1A1518'],
+]
+const GLYPHS = ['octopus', 'leaf', 'circle', 'grain', 'dot'] as const
+
+function hashStr(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+function artFor(id: string) {
+  const h = hashStr(id)
+  return { palette: PALETTES[h % PALETTES.length], glyph: GLYPHS[h % GLYPHS.length] }
+}
 
 export default function SessionsPage() {
   const router = useRouter()
@@ -62,173 +82,146 @@ export default function SessionsPage() {
     setActiveTagFilter(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
   }
 
+  const hasFilters = activeTagFilter.length > 0 || statusFilter !== 'all' || search.trim()
+
   return (
-    <div style={{ padding: '32px 40px', background: 'var(--bg)', minHeight: '100vh' }}>
+    <div style={{ padding: '32px 36px 48px', background: 'var(--bg)', minHeight: '100vh', paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <p className="eyebrow" style={{ marginBottom: 6 }}>R&D Workspace</p>
-          <h1 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 36, fontWeight: 900, color: 'var(--ink)', margin: 0 }}>
-            Sessions
-          </h1>
+          <h1 className="h-section">Sessions</h1>
         </div>
-        <button
-          onClick={() => setShowNewSession(true)}
-          style={{
-            padding: '11px 20px', background: 'var(--green)', color: '#FBF7F0',
-            border: 'none', borderRadius: 999, fontSize: 14, fontWeight: 600,
-            cursor: 'pointer', fontFamily: 'inherit',
-            display: 'flex', alignItems: 'center', gap: 7,
-            boxShadow: '0 4px 14px rgba(47,93,58,0.25)',
-          }}
-        >
-          <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> New Session
+        <button className="cta" onClick={() => setShowNewSession(true)}>
+          <Icon.Plus size={16} stroke="#FBF8F2" /> New
         </button>
       </div>
 
       {/* Search */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        background: 'var(--surface)', border: '1px solid var(--line-2)',
-        borderRadius: 999, padding: '0 18px', marginBottom: 16,
-      }}>
-        <span style={{ color: 'var(--ink-4)', fontSize: 15 }}>⌕</span>
+      <div className="search" style={{ marginBottom: 14 }}>
+        <Icon.Search size={18} stroke="var(--muted)" />
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search sessions, notes, tags..."
-          style={{
-            flex: 1, border: 'none', outline: 'none', background: 'transparent',
-            fontSize: 14, color: 'var(--ink)', padding: '13px 0', fontFamily: 'inherit',
-          }}
         />
         {search && (
-          <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', color: 'var(--ink-4)', cursor: 'pointer', fontSize: 16 }}>×</button>
+          <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', display: 'flex', alignItems: 'center' }}>
+            <Icon.Close size={16} stroke="var(--muted)" />
+          </button>
         )}
       </div>
 
-      {/* Filters row */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 24 }}>
+      {/* Filter chips */}
+      <div className="scroll-hide" style={{ display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 24, paddingBottom: 4 }}>
         {(['all', 'open', 'closed'] as const).map(f => (
-          <button key={f} onClick={() => setStatusFilter(f)} style={{
-            padding: '6px 14px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
-            border: `1px solid ${statusFilter === f ? 'var(--green)' : 'var(--line)'}`,
-            background: statusFilter === f ? 'var(--green-soft)' : 'transparent',
-            color: statusFilter === f ? 'var(--green-deep)' : 'var(--ink-3)',
-            fontSize: 12, fontWeight: statusFilter === f ? 600 : 400, textTransform: 'capitalize',
-          }}>
+          <button key={f} onClick={() => setStatusFilter(f)}
+            className={`chip ${statusFilter === f ? 'is-active' : 'is-soft'}`}
+            style={{ flexShrink: 0, textTransform: 'capitalize', height: 32, fontSize: 12 }}
+          >
             {f}
           </button>
         ))}
-
-        <div style={{ width: 1, background: 'var(--line)', margin: '0 4px' }} />
-
+        <div style={{ width: 1, background: 'var(--line-strong)', margin: '0 4px', flexShrink: 0 }} />
         {QUICK_TAGS.map(tag => {
           const active = activeTagFilter.includes(tag)
           return (
-            <button key={tag} onClick={() => toggleTagFilter(tag)} style={{
-              padding: '6px 14px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
-              border: `1px solid ${active ? 'var(--amber)' : 'var(--line)'}`,
-              background: active ? 'var(--amber-soft)' : 'transparent',
-              color: active ? '#6B4D14' : 'var(--ink-3)',
-              fontSize: 12, fontWeight: active ? 600 : 400,
-            }}>
+            <button key={tag} onClick={() => toggleTagFilter(tag)}
+              className={`chip ${active ? 'is-active' : 'is-soft'}`}
+              style={{ flexShrink: 0, height: 32, fontSize: 12 }}
+            >
               {tag}
             </button>
           )
         })}
-
-        {(activeTagFilter.length > 0 || statusFilter !== 'all' || search) && (
-          <button onClick={() => { setActiveTagFilter([]); setStatusFilter('all'); setSearch('') }} style={{
-            background: 'none', border: 'none', color: 'var(--coral)', fontSize: 12,
-            fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', padding: '6px 0',
-          }}>
+        {hasFilters && (
+          <button onClick={() => { setActiveTagFilter([]); setStatusFilter('all'); setSearch('') }}
+            style={{ background: 'none', border: 'none', color: 'var(--tier-twist)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', padding: '0 8px', flexShrink: 0 }}
+          >
             Clear all
           </button>
         )}
       </div>
 
-      {!loading && (search || activeTagFilter.length > 0 || statusFilter !== 'all') && (
-        <p style={{ fontSize: 13, color: 'var(--ink-4)', marginBottom: 16 }}>
+      {hasFilters && !loading && (
+        <p className="body-sm" style={{ marginBottom: 14 }}>
           {filtered.length} result{filtered.length !== 1 ? 's' : ''}
         </p>
       )}
 
       {loading ? (
-        <p style={{ color: 'var(--ink-4)', fontSize: 14 }}>Loading sessions...</p>
+        <p className="body-sm">Loading sessions...</p>
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 40px', border: '2px dashed var(--line)', borderRadius: 16 }}>
+        <div style={{ textAlign: 'center', padding: '60px 40px', border: '1px dashed var(--line-strong)', borderRadius: 20 }}>
           <p style={{ fontSize: 36, marginBottom: 12 }}>🧪</p>
-          <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 20, fontWeight: 700, color: 'var(--ink)', marginBottom: 8 }}>
+          <h3 style={{ fontFamily: 'var(--serif)', fontSize: 20, fontWeight: 400, color: 'var(--ink)', marginBottom: 8 }}>
             {sessions.length === 0 ? 'No sessions yet' : 'No matching sessions'}
           </h3>
-          <p style={{ color: 'var(--ink-4)', fontSize: 14, marginBottom: 20 }}>
+          <p className="body-sm" style={{ marginBottom: 20 }}>
             {sessions.length === 0
-              ? 'Start exploring ingredients and click "Start Session" to begin.'
+              ? 'Start exploring ingredients and click "New" to begin.'
               : 'Try adjusting your search or filters.'}
           </p>
           {sessions.length === 0 && (
-            <button onClick={() => router.push('/')} style={{
-              padding: '11px 24px', borderRadius: 999, background: 'var(--green)',
-              color: '#FBF7F0', border: 'none', fontSize: 14, fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}>
+            <button className="cta" onClick={() => router.push('/')}>
               Explore Ingredients
             </button>
           )}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map(session => {
             const tags = tagMap[session.id] || []
+            const art = artFor(session.id)
             return (
               <button
                 key={session.id}
                 onClick={() => router.push(`/sessions/${session.id}`)}
                 style={{
-                  textAlign: 'left', padding: '18px 20px',
-                  background: 'var(--surface)', border: '1px solid var(--line)',
-                  borderRadius: 18, cursor: 'pointer',
-                  boxShadow: 'var(--soft-shadow)', width: '100%',
+                  display: 'flex', gap: 0, textAlign: 'left',
+                  background: 'var(--card)', border: '1px solid var(--line)',
+                  borderRadius: 18, cursor: 'pointer', overflow: 'hidden',
+                  boxShadow: 'var(--shadow-1)', width: '100%',
                   transition: 'transform 0.15s, box-shadow 0.15s',
                 }}
-                onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = '0 6px 24px rgba(60,40,20,0.08)' }}
-                onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = ''; el.style.boxShadow = 'var(--soft-shadow)' }}
+                onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-1px)'; el.style.boxShadow = 'var(--shadow-2)' }}
+                onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = ''; el.style.boxShadow = 'var(--shadow-1)' }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <span className={`status-badge status-${session.status}`}>
-                    {session.status === 'open' ? 'Open' : 'Closed'}
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>
-                    {new Date(session.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
+                {/* FoodArt thumbnail */}
+                <div style={{ width: 76, flexShrink: 0, overflow: 'hidden', borderRadius: '17px 0 0 17px' }}>
+                  <FoodArt palette={art.palette} glyph={art.glyph} style={{ height: '100%', minHeight: 84 }} />
                 </div>
 
-                <h3 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 18, fontWeight: 700, color: 'var(--ink)', margin: '0 0 8px', lineHeight: 1.2 }}>
-                  {session.name}
-                </h3>
-
-                {session.category && (
-                  <p style={{ fontSize: 11, color: 'var(--ink-4)', margin: '0 0 8px' }}>🏷 {session.category}</p>
-                )}
-
-                {tags.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {tags.slice(0, 4).map(tag => (
-                      <span key={tag} style={{
-                        padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 600,
-                        background: 'var(--surface-2)', color: 'var(--ink-3)',
-                        border: '1px solid var(--line)',
-                      }}>
-                        {tag}
-                      </span>
-                    ))}
-                    {tags.length > 4 && (
-                      <span style={{ fontSize: 10, color: 'var(--ink-4)', padding: '2px 0' }}>+{tags.length - 4}</span>
-                    )}
+                {/* Content */}
+                <div style={{ flex: 1, minWidth: 0, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6, justifyContent: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span className={`badge ${session.status}`}>
+                      <span className="dot" />
+                      {session.status === 'open' ? 'Open' : 'Closed'}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 'auto' }}>
+                      {new Date(session.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
                   </div>
-                )}
+
+                  <h3 style={{ fontFamily: 'var(--serif)', fontSize: 17, fontWeight: 400, color: 'var(--ink)', margin: 0, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {session.name}
+                  </h3>
+
+                  {tags.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {tags.slice(0, 3).map(tag => (
+                        <span key={tag} className="chip is-soft" style={{ height: 22, fontSize: 10, padding: '0 8px' }}>
+                          {tag}
+                        </span>
+                      ))}
+                      {tags.length > 3 && (
+                        <span style={{ fontSize: 10, color: 'var(--muted)', padding: '2px 0' }}>+{tags.length - 3}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </button>
             )
           })}
