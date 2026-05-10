@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/context/ThemeContext'
 import Sidebar from '@/components/Sidebar'
@@ -8,17 +8,21 @@ export const metadata: Metadata = {
   description: 'Your personal flavor intelligence system',
 }
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider>
-          <div style={{ display: 'flex', minHeight: '100vh' }}>
-            <Sidebar />
-            <main className="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', overflow: 'hidden' }}>
-              {children}
-            </main>
-          </div>
+          <Sidebar />
+          <main className="main-content">
+            {children}
+          </main>
         </ThemeProvider>
       </body>
     </html>
