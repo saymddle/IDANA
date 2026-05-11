@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, IDANAGlyph, IconProps } from '@/components/Icons'
+import { computeHubPairings } from '@/lib/hubUtils'
+import NewSessionModal from '@/components/NewSessionModal'
 
 interface Pairing { name: string; score: number; emphasis: boolean }
 
@@ -34,8 +36,7 @@ function hashStr(s: string): number {
 }
 
 function iconFor(name: string) {
-  const key = ICON_POOL[hashStr(name) % ICON_POOL.length] as IconKey
-  return Icon[key]
+  return Icon[ICON_POOL[hashStr(name) % ICON_POOL.length] as IconKey]
 }
 
 function getTier(p: Pairing): Tier {
@@ -50,7 +51,19 @@ interface RingNode {
   x: number; y: number; r: number
 }
 
-function layoutRadial(pairings: Pairing[], density: number, w: number, h: number) {
+function scoreToRadius(score: number, minScore: number, maxScore: number): number {
+  if (maxScore === minScore) return 42
+  const t = (score - minScore) / (maxScore - minScore)
+  return Math.round(36 + t * 18)
+}
+
+function layoutRadial(
+  pairings: Pairing[],
+  density: number,
+  w: number,
+  h: number,
+  useScoreRadius: boolean,
+): { center: { x: number; y: number; r: number }; nodes: RingNode[] } {
   const groups: Record<Tier, Pairing[]> = { strong: [], good: [], twist: [] }
   for (const p of pairings) groups[getTier(p)].push(p)
 
@@ -64,20 +77,26 @@ function layoutRadial(pairings: Pairing[], density: number, w: number, h: number
   const cy = h / 2 - 8
   const centerR = Math.min(w, h) * 0.16
   const ringR = Math.min(w, h) * 0.40
-
   const N = ring.length
   const start = N > 0 ? -Math.PI / 2 - Math.PI / N : -Math.PI / 2
 
-  const nodes: RingNode[] = ring.map((p, i) => {
-    const angle = start + (i * 2 * Math.PI) / N
-    return {
-      pairing: p,
-      tier: p.tier,
-      x: cx + Math.cos(angle) * ringR,
-      y: cy + Math.sin(angle) * ringR,
-      r: p.tier === 'strong' ? 44 : p.tier === 'good' ? 40 : 38,
-    }
-  })
+  let minScore = Infinity, maxScore = -Infinity
+  if (useScoreRadius) {
+    ring.forEach(p => {
+      if (p.score < minScore) minScore = p.score
+      if (p.score > maxScore) maxScore = p.score
+    })
+  }
+
+  const nodes: RingNode[] = ring.map((p, i) => ({
+    pairing: p,
+    tier: p.tier,
+    x: cx + Math.cos(start + (i * 2 * Math.PI) / N) * ringR,
+    y: cy + Math.sin(start + (i * 2 * Math.PI) / N) * ringR,
+    r: useScoreRadius
+      ? scoreToRadius(p.score, minScore, maxScore)
+      : (p.tier === 'strong' ? 44 : p.tier === 'good' ? 40 : 38),
+  }))
 
   return { center: { x: cx, y: cy, r: centerR }, nodes }
 }
@@ -89,16 +108,23 @@ export default function PairingGraph({
   sessionId = null,
   onStartSession,
   onAddToSession,
-  onNodeSelect,
 }: PairingGraphProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 700, h: 520 })
   const [fetchedIngredient, setFetchedIngredient] = useState<string | null>(null)
   const [fetchedPairings, setFetchedPairings] = useState<Pairing[]>([])
   const [fetching, setFetching] = useState(false)
-  const [selectedNode, setSelectedNode] = useState<RingNode | null>(null)
   const [density, setDensity] = useState(8)
 
+  // Selection + hub state
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [hubPairings, setHubPairings] = useState<Pairing[] | null>(null)
+  const [hubLoading, setHubLoading] = useState(false)
+
+  // Modal
+  const [showModal, setShowModal] = useState(false)
+
+  // Self-fetching mode
   useEffect(() => {
     if (!ingredientName) return
     setFetching(true)
@@ -107,14 +133,12 @@ export default function PairingGraph({
     fetch(`/api/ingredient/${encodeURIComponent(ingredientName)}`)
       .then(r => r.json())
       .then(data => {
-        if (data.found) {
-          setFetchedIngredient(data.ingredient)
-          setFetchedPairings(data.pairings)
-        }
+        if (data.found) { setFetchedIngredient(data.ingredient); setFetchedPairings(data.pairings) }
       })
       .finally(() => setFetching(false))
   }, [ingredientName])
 
+  // ResizeObserver
   useEffect(() => {
     if (!wrapRef.current) return
     const ro = new ResizeObserver(([e]) => {
@@ -125,15 +149,54 @@ export default function PairingGraph({
     return () => ro.disconnect()
   }, [])
 
+  const basePairings = fetchedPairings.length > 0 ? fetchedPairings : (pairingsProp || [])
   const centerName = fetchedIngredient || ingredient || ingredientName || ''
-  const activePairings = fetchedPairings.length > 0 ? fetchedPairings : (pairingsProp || [])
+
+  // Hub recomputation whenever selection changes
+  const refreshHub = useCallback(async (sel: Set<string>) => {
+    if (sel.size === 0) { setHubPairings(null); return }
+    setHubLoading(true)
+    try {
+      const arr = Array.from(sel)
+      let results: Pairing[]
+      if (sel.size === 1) {
+        const res = await fetch(`/api/ingredient/${encodeURIComponent(arr[0])}`)
+        const data = await res.json()
+        results = data.found ? data.pairings : []
+      } else {
+        results = await computeHubPairings(arr, true)
+      }
+      const selLower = new Set(arr.map(s => s.toLowerCase()))
+      setHubPairings(results.filter(p => !selLower.has(p.name.toLowerCase())))
+    } finally {
+      setHubLoading(false)
+    }
+  }, [])
+
+  function toggleSelected(name: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(name) ? next.delete(name) : next.add(name)
+      refreshHub(next)
+      return next
+    })
+  }
+
+  const activePairings = hubPairings ?? basePairings
+  const useScoreRadius = selected.size >= 2 && hubPairings !== null
+
+  const centerLabel =
+    selected.size === 0 ? centerName
+    : selected.size === 1 ? Array.from(selected)[0]
+    : `${selected.size} ingredients`
 
   const layout = useMemo(
-    () => layoutRadial(activePairings, density, size.w, size.h),
-    [activePairings, density, size.w, size.h]
+    () => layoutRadial(activePairings, density, size.w, size.h, useScoreRadius),
+    [activePairings, density, size.w, size.h, useScoreRadius]
   )
 
   const hidden = Math.max(0, activePairings.length - layout.nodes.length)
+  const selectedArr = Array.from(selected)
 
   if (fetching) {
     return (
@@ -146,7 +209,7 @@ export default function PairingGraph({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
       <div style={{ padding: '8px 16px 0', flexShrink: 0 }}>
         <TierLegend />
       </div>
@@ -168,34 +231,6 @@ export default function PairingGraph({
           }} />
         </div>
 
-        {/* Dashed edges */}
-        <svg
-          viewBox={`0 0 ${size.w} ${size.h}`}
-          width={size.w} height={size.h}
-          style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
-        >
-          {layout.nodes.map((n) => {
-            const tone = TIERS[n.tier]
-            const dx = n.x - layout.center.x
-            const dy = n.y - layout.center.y
-            const dist = Math.hypot(dx, dy)
-            const ux = dx / dist, uy = dy / dist
-            const x1 = layout.center.x + ux * layout.center.r
-            const y1 = layout.center.y + uy * layout.center.r
-            const x2 = n.x - ux * n.r
-            const y2 = n.y - uy * n.r
-            return (
-              <g key={n.pairing.name}>
-                <line x1={x1} y1={y1} x2={x2} y2={y2}
-                  stroke={tone.color} strokeOpacity="0.5"
-                  strokeWidth="1.2" strokeDasharray="3 4"
-                />
-                <circle cx={x1} cy={y1} r="2.5" fill={tone.color} />
-              </g>
-            )
-          })}
-        </svg>
-
         {/* Center node */}
         <div style={{
           position: 'absolute',
@@ -210,22 +245,40 @@ export default function PairingGraph({
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
           padding: 10, textAlign: 'center',
+          transition: 'all 0.3s ease',
+          zIndex: 5,
         }}>
-          <div style={{ marginBottom: 6 }}>
-            <IDANAGlyph size={28} color="var(--green)" />
-          </div>
-          <div style={{ fontFamily: 'var(--serif)', fontSize: 15, lineHeight: 1.05, color: 'var(--ink)', maxWidth: '90%' }}>
-            {centerName || '—'}
-          </div>
+          {hubLoading ? (
+            <div style={{ width: 18, height: 18, border: '2px solid var(--line)', borderTopColor: 'var(--green)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          ) : (
+            <>
+              <div style={{ marginBottom: 6 }}>
+                <IDANAGlyph size={28} color={selected.size > 0 ? 'var(--green)' : 'var(--muted-soft)'} />
+              </div>
+              <div style={{
+                fontFamily: 'var(--serif)',
+                fontSize: selected.size >= 2 ? 12 : 15,
+                lineHeight: 1.1, color: 'var(--ink)', maxWidth: '90%',
+                transition: 'font-size 0.2s ease',
+              }}>
+                {centerLabel || '—'}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Ring nodes */}
-        {layout.nodes.map((n) => (
-          <RingNodeBtn key={n.pairing.name} node={n} onTap={() => setSelectedNode(n)} />
+        {!hubLoading && layout.nodes.map(n => (
+          <RingNodeBtn
+            key={n.pairing.name}
+            node={n}
+            isSelected={selected.has(n.pairing.name)}
+            onTap={() => toggleSelected(n.pairing.name)}
+          />
         ))}
 
         {/* Show more */}
-        {hidden > 0 && (
+        {hidden > 0 && !hubLoading && (
           <button
             onClick={() => setDensity(d => d + 4)}
             style={{
@@ -241,10 +294,10 @@ export default function PairingGraph({
         )}
 
         {/* Empty state */}
-        {activePairings.length === 0 && !fetching && (
+        {activePairings.length === 0 && !fetching && !hubLoading && (
           <div style={{
-            position: 'absolute', inset: 0, display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexDirection: 'column', gap: 10, color: 'var(--muted)',
           }}>
             <IDANAGlyph size={36} color="var(--muted-soft)" />
@@ -253,23 +306,54 @@ export default function PairingGraph({
         )}
       </div>
 
-      {/* Detail sheet */}
-      {selectedNode && (
-        <DetailSheet
-          node={selectedNode}
-          centerName={centerName}
-          sessionId={sessionId}
-          onClose={() => setSelectedNode(null)}
-          onAddToSession={onAddToSession}
-          onStartSession={onStartSession}
-          onNodeSelect={onNodeSelect}
+      {/* Floating Start Session button */}
+      <div style={{
+        position: 'fixed',
+        bottom: 'calc(90px + env(safe-area-inset-bottom))',
+        left: 0, right: 0,
+        display: 'flex', justifyContent: 'center',
+        padding: '0 16px',
+        pointerEvents: 'none',
+        zIndex: 40,
+      }}>
+        <button
+          onClick={() => setShowModal(true)}
+          style={{
+            width: '100%', maxWidth: 320,
+            height: 52,
+            background: 'var(--green)', color: '#FBF8F2',
+            border: 'none', borderRadius: 999,
+            fontSize: 15, fontWeight: 600, fontFamily: 'inherit',
+            cursor: 'pointer',
+            boxShadow: '0 8px 24px rgba(59,83,35,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            opacity: selected.size > 0 ? 1 : 0,
+            transform: selected.size > 0 ? 'translateY(0)' : 'translateY(12px)',
+            transition: 'opacity 0.2s ease, transform 0.2s ease',
+            pointerEvents: selected.size > 0 ? 'auto' : 'none',
+          }}
+        >
+          <Icon.Plus size={16} stroke="#FBF8F2" />
+          Start Session · {selected.size} ingredient{selected.size !== 1 ? 's' : ''}
+        </button>
+      </div>
+
+      {showModal && selectedArr.length > 0 && (
+        <NewSessionModal
+          ingredientA={selectedArr[0]}
+          allIngredients={selectedArr}
+          onClose={() => setShowModal(false)}
         />
       )}
     </div>
   )
 }
 
-function RingNodeBtn({ node, onTap }: { node: RingNode; onTap: () => void }) {
+function RingNodeBtn({ node, isSelected, onTap }: {
+  node: RingNode
+  isSelected: boolean
+  onTap: () => void
+}) {
   const tone = TIERS[node.tier]
   const Glyph = iconFor(node.pairing.name)
   const words = node.pairing.name.split(' ')
@@ -282,17 +366,21 @@ function RingNodeBtn({ node, onTap }: { node: RingNode; onTap: () => void }) {
         left: node.x - node.r, top: node.y - node.r,
         width: node.r * 2, height: node.r * 2,
         borderRadius: '50%',
-        background: tone.tintSoft, border: `1px solid ${tone.tint}`,
-        boxShadow: 'var(--shadow-bubble)',
+        background: tone.tintSoft,
+        border: 'none',
+        outline: isSelected ? '3px solid var(--green)' : '3px solid transparent',
+        outlineOffset: '2px',
+        boxShadow: isSelected
+          ? '0 4px 20px rgba(59,83,35,0.25), var(--shadow-bubble)'
+          : 'var(--shadow-bubble)',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         padding: 6, textAlign: 'center', color: 'var(--ink)',
-        transition: 'transform 160ms ease, box-shadow 160ms',
+        transform: isSelected ? 'scale(1.08)' : 'scale(1)',
+        transition: 'transform 180ms ease, outline-color 180ms ease, box-shadow 180ms ease',
         cursor: 'pointer',
+        zIndex: isSelected ? 10 : 1,
       }}
-      onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.96)' }}
-      onMouseUp={e => { e.currentTarget.style.transform = '' }}
-      onMouseLeave={e => { e.currentTarget.style.transform = '' }}
     >
       <div style={{ color: tone.color, marginTop: -2, marginBottom: 2 }}>
         <Glyph size={18} sw={1.6} stroke={tone.color} />
@@ -314,8 +402,9 @@ function RingNodeBtn({ node, onTap }: { node: RingNode; onTap: () => void }) {
       <span style={{
         position: 'absolute', right: 2, bottom: 2,
         width: 16, height: 16, borderRadius: '50%',
-        background: tone.color,
+        background: isSelected ? 'var(--green)' : tone.color,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'background 180ms ease',
       }}>
         <Icon.Plus size={8} stroke="#FBF8F2" sw={2.4} />
       </span>
@@ -328,102 +417,10 @@ function TierLegend() {
     <div style={{ display: 'flex', gap: 12, padding: '0 4px', fontSize: 11, color: 'var(--muted)', alignItems: 'center', flexWrap: 'wrap' }}>
       {(Object.entries(TIERS) as [Tier, typeof TIERS[Tier]][]).map(([k, t]) => (
         <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 8, height: 8, borderRadius: 999, background: t.color }}/>
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: t.color }} />
           {t.label}
         </span>
       ))}
     </div>
-  )
-}
-
-function DetailSheet({
-  node, centerName, sessionId, onClose, onAddToSession, onStartSession, onNodeSelect,
-}: {
-  node: RingNode
-  centerName: string
-  sessionId: string | null
-  onClose: () => void
-  onAddToSession?: (names: string[]) => void
-  onStartSession?: (ingredient: string, pairings: string[]) => void
-  onNodeSelect?: (name: string) => void
-}) {
-  const tone = TIERS[node.tier]
-  const Glyph = iconFor(node.pairing.name)
-
-  return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(2px)', zIndex: 100 }} />
-      <div style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 101,
-        background: 'var(--card)', borderRadius: '20px 20px 0 0',
-        padding: '20px 24px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))',
-        maxWidth: 480, margin: '0 auto',
-        boxShadow: '0 -8px 40px rgba(0,0,0,0.14)',
-        animation: 'slideUp 0.25s ease',
-      }}>
-        <style>{`@keyframes slideUp { from { transform: translateY(100%); opacity: 0 } to { transform: translateY(0); opacity: 1 } }`}</style>
-
-        <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--line-strong)', margin: '0 auto 20px' }} />
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: '50%',
-            background: tone.tintSoft, border: `1px solid ${tone.tint}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Glyph size={20} sw={1.6} stroke={tone.color} />
-          </div>
-          <span style={{
-            padding: '4px 10px', borderRadius: 999,
-            background: tone.tintSoft, color: tone.color,
-            border: `1px solid ${tone.tint}`,
-            fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
-          }}>
-            {tone.label}
-          </span>
-        </div>
-
-        <h2 style={{ fontFamily: 'var(--serif)', fontSize: 28, lineHeight: 1.05, color: 'var(--ink)', margin: '0 0 6px' }}>
-          {node.pairing.name}
-        </h2>
-        <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 20px' }}>
-          Flavor compatibility score: {Math.round(node.pairing.score * 100) / 100}
-        </p>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {onNodeSelect && (
-            <button
-              onClick={() => { onNodeSelect(node.pairing.name); onClose() }}
-              style={{
-                width: '100%', padding: '13px',
-                background: 'transparent', border: '1px solid var(--line-strong)',
-                borderRadius: 12, color: 'var(--ink-soft)',
-                fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-              }}
-            >
-              Find more with {node.pairing.name}
-            </button>
-          )}
-          {sessionId && onAddToSession && (
-            <button
-              onClick={() => { onAddToSession([node.pairing.name]); onClose() }}
-              className="cta"
-              style={{ width: '100%', justifyContent: 'center', height: 48, fontSize: 14 }}
-            >
-              + Add to hub
-            </button>
-          )}
-          {!sessionId && onStartSession && (
-            <button
-              onClick={() => { onStartSession(centerName, [node.pairing.name]); onClose() }}
-              className="cta"
-              style={{ width: '100%', justifyContent: 'center', height: 48, fontSize: 14 }}
-            >
-              Start session with this pair
-            </button>
-          )}
-        </div>
-      </div>
-    </>
   )
 }
