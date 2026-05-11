@@ -201,20 +201,19 @@ export default function NewDishModal({ sessionId, onClose, onCreated }: NewDishM
           />
         </Field>
 
-        {error && <p style={{ color: 'var(--accent-coral)', fontSize: 13, marginBottom: 16 }}>{error}</p>}
+        <button
+          onClick={handleCreate}
+          disabled={loading || !name.trim()}
+          style={{ display: 'block', width: '100%', height: 48, borderRadius: 999, border: 'none', background: loading || !name.trim() ? 'var(--border)' : 'var(--accent-green)', color: '#F5F0E8', fontSize: 15, fontWeight: 600, cursor: loading || !name.trim() ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif', marginBottom: 10 }}
+        >
+          {loading ? 'Saving…' : 'Save Dish'}
+        </button>
 
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: 14, borderRadius: 12, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 15, fontWeight: 500, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-            Cancel
-          </button>
-          <button
-            onClick={handleCreate}
-            disabled={loading || !name.trim()}
-            style={{ flex: 2, padding: 14, borderRadius: 12, border: 'none', background: loading || !name.trim() ? 'var(--border)' : 'var(--accent-green)', color: '#F5F0E8', fontSize: 15, fontWeight: 600, cursor: loading || !name.trim() ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}
-          >
-            {loading ? 'Saving...' : 'Log Dish'}
-          </button>
-        </div>
+        {error && <p style={{ color: 'var(--accent-coral)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
+
+        <button onClick={onClose} style={{ display: 'block', width: '100%', padding: '12px', borderRadius: 12, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+          Cancel
+        </button>
       </div>
     </>
   )

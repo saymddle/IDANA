@@ -8,11 +8,15 @@ import NewDishModal from '@/components/NewDishModal'
 
 const PairingGraph = dynamic(() => import('@/components/PairingGraph'), { ssr: false })
 
-interface Session { id: string; name: string; status: string; category: string | null; notes: string | null; created_at: string }
+interface Session { id: string; name: string; status: string; category: string | null; notes: unknown; created_at: string }
 interface SessionIngredient { id: string; ingredient_name: string }
 interface Pairing { name: string; score: number; emphasis: boolean }
 interface Dish { id: string; name: string; category: string | null; created_at: string }
 interface SessionTag { id: string; tag_name: string; source: string }
+interface NoteItem { id: string; content: string; createdAt: string; updatedAt: string }
+
+type TabKey = 'Hub' | 'Notes' | 'Dishes'
+const TABS: TabKey[] = ['Hub', 'Notes', 'Dishes']
 
 const ALL_TAGS: Record<string, string[]> = {
   'Flavor Profile': ['Umami', 'Sweet', 'Salty', 'Sour', 'Bitter', 'Savory', 'Funky', 'Fermented'],
@@ -25,6 +29,12 @@ const TAG_COLORS: Record<string, string> = {
   'Aromatic':       '#C8923A',
   'Texture':        '#6B5B8A',
   'Heat':           '#C56B4F',
+}
+
+function parseNotes(raw: unknown): NoteItem[] {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw as NoteItem[]
+  return []
 }
 
 async function fetchPairings(name: string): Promise<{ pairings: Pairing[]; found: boolean; ingredient: string }> {
@@ -41,11 +51,19 @@ export default function SessionPage() {
   const [ingredients, setIngredients] = useState<SessionIngredient[]>([])
   const [dishes, setDishes] = useState<Dish[]>([])
   const [sessionTags, setSessionTags] = useState<SessionTag[]>([])
-  const [notes, setNotes] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [notesList, setNotesList] = useState<NoteItem[]>([])
   const [loading, setLoading] = useState(true)
   const [showNewDish, setShowNewDish] = useState(false)
   const [showTagPicker, setShowTagPicker] = useState(false)
+
+  // Note state
+  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null)
+  const [editContent, setEditContent] = useState('')
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null)
+  const [savingNote, setSavingNote] = useState(false)
+
+  // Mobile panel
+  const [activeTab, setActiveTab] = useState<TabKey | null>(null)
 
   // Graph state
   const [hubMode, setHubMode] = useState(true)
@@ -65,7 +83,7 @@ export default function SessionPage() {
       supabase.from('dishes').select('*').eq('session_id', sessionId).order('created_at', { ascending: false }),
       supabase.from('session_tags').select('*').eq('session_id', sessionId),
     ])
-    if (s) { setSession(s); setNotes(s.notes || '') }
+    if (s) { setSession(s as Session); setNotesList(parseNotes((s as Session).notes)) }
     if (ings) setIngredients(ings)
     if (d) setDishes(d)
     if (tags) setSessionTags(tags)
@@ -118,18 +136,11 @@ export default function SessionPage() {
     await addToHub([searchResult.ingredient])
   }
 
-  async function removeIngredient(id: string, name: string) {
+  async function removeIngredient(id: string) {
     await supabase.from('session_ingredients').delete().eq('id', id)
     const next = ingredients.filter(i => i.id !== id)
     setIngredients(next)
     if (hubMode) refreshHub(next)
-  }
-
-  async function saveNotes() {
-    if (!session) return
-    setSaving(true)
-    await supabase.from('sessions').update({ notes, updated_at: new Date().toISOString() }).eq('id', sessionId)
-    setSaving(false)
   }
 
   async function closeSession() {
@@ -150,6 +161,60 @@ export default function SessionPage() {
     }
   }
 
+  async function createNote() {
+    const newNote: NoteItem = {
+      id: crypto.randomUUID(),
+      content: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    const next = [newNote, ...notesList]
+    setNotesList(next)
+    setExpandedNoteId(newNote.id)
+    setEditContent('')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await supabase.from('sessions').update({ notes: next as any }).eq('id', sessionId)
+  }
+
+  async function saveNote(id: string) {
+    setSavingNote(true)
+    const next = notesList.map(n =>
+      n.id === id ? { ...n, content: editContent, updatedAt: new Date().toISOString() } : n
+    )
+    setNotesList(next)
+    setExpandedNoteId(null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await supabase.from('sessions').update({ notes: next as any }).eq('id', sessionId)
+    setSavingNote(false)
+  }
+
+  async function deleteNote(id: string) {
+    const next = notesList.filter(n => n.id !== id)
+    setNotesList(next)
+    setExpandedNoteId(null)
+    setDeletingNoteId(null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await supabase.from('sessions').update({ notes: next as any }).eq('id', sessionId)
+  }
+
+  function handleDeleteTap(id: string) {
+    if (deletingNoteId === id) {
+      deleteNote(id)
+    } else {
+      setDeletingNoteId(id)
+      setTimeout(() => setDeletingNoteId(prev => prev === id ? null : prev), 2000)
+    }
+  }
+
+  function expandNote(note: NoteItem) {
+    setExpandedNoteId(note.id)
+    setEditContent(note.content)
+  }
+
+  function handleTabTap(tab: TabKey) {
+    setActiveTab(prev => prev === tab ? null : tab)
+  }
+
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--ink-3)' }}>
       <Spinner />
@@ -164,277 +229,420 @@ export default function SessionPage() {
   const graphPairings = hubMode ? hubPairings : (searchResult?.pairings || [])
   const graphLoading = hubMode ? hubLoading : searchLoading
 
-  return (
-    <div style={{ display: 'flex', height: '100vh', background: 'var(--bg)', overflow: 'hidden' }}>
+  // ── Shared JSX sections ───────────────────────────────────────────────────
 
-      {/* Left panel */}
-      <div style={{ width: 320, flexShrink: 0, borderRight: '1px solid var(--line)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-
-        {/* Header */}
-        <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--line)' }}>
-          <button onClick={() => router.push('/sessions')} style={{ background: 'none', border: 'none', color: 'var(--ink-4)', cursor: 'pointer', fontSize: 12, marginBottom: 8, padding: 0, fontFamily: 'inherit' }}>
-            ← Sessions
+  const noteRows = notesList.map(note => {
+    const isExpanded = expandedNoteId === note.id
+    return (
+      <div key={note.id} style={{ background: 'var(--bg)', borderRadius: 10, border: '1px solid var(--line)', overflow: 'hidden' }}>
+        {!isExpanded ? (
+          <button
+            onClick={() => expandNote(note)}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {note.content || <span style={{ fontStyle: 'italic', color: 'var(--ink-4)' }}>Empty note</span>}
+            </p>
           </button>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-            <h1 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 19, fontWeight: 700, color: 'var(--ink)', lineHeight: 1.2, margin: 0 }}>
-              {session.name}
-            </h1>
-            <span className={`status-badge status-${session.status}`} style={{ flexShrink: 0, marginTop: 2 }}>
-              {session.status === 'open' ? 'Open' : 'Closed'}
-            </span>
-          </div>
-          <p style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 4 }}>
-            {session.category && <span style={{ marginRight: 8 }}>🏷 {session.category}</span>}
-            {new Date(session.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </p>
-        </div>
-
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
-
-          {/* Hub ingredients */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <SLabel>Flavor Hub · {ingredients.length}</SLabel>
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {ingredients.map(ing => (
-                <div key={ing.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  padding: '5px 10px', borderRadius: 999,
-                  background: 'var(--surface-2)', border: '1px solid var(--line)',
-                  fontSize: 12, fontWeight: 500, color: 'var(--ink-2)',
-                }}>
-                  <button
-                    onClick={() => { setHubMode(false); searchIngredient(ing.ingredient_name); setSearchQuery(ing.ingredient_name) }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontFamily: 'inherit', fontSize: 'inherit', padding: 0 }}
-                  >
-                    {ing.ingredient_name}
-                  </button>
-                  <button onClick={() => removeIngredient(ing.id, ing.ingredient_name)} style={{ background: 'none', border: 'none', color: 'var(--ink-4)', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
-                </div>
-              ))}
-              {ingredients.length === 0 && <p style={{ fontSize: 12, color: 'var(--ink-4)' }}>No ingredients yet.</p>}
-            </div>
-          </div>
-
-          {/* Session tags */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <SLabel>Tags · {sessionTags.length}</SLabel>
-              <button onClick={() => setShowTagPicker(!showTagPicker)} style={{
-                background: 'none', border: 'none', color: 'var(--green)', fontSize: 12,
-                fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-                {showTagPicker ? 'Done' : '+ Edit'}
-              </button>
-            </div>
-            {!showTagPicker && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                {sessionTags.length === 0 && <p style={{ fontSize: 12, color: 'var(--ink-4)' }}>No tags yet.</p>}
-                {sessionTags.map(t => {
-                  const cat = Object.entries(ALL_TAGS).find(([, tags]) => tags.includes(t.tag_name))?.[0]
-                  const color = cat ? TAG_COLORS[cat] : 'var(--ink-3)'
-                  return (
-                    <span key={t.id} style={{
-                      padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600,
-                      background: `${color}18`, color, border: `1px solid ${color}40`,
-                    }}>
-                      {t.tag_name}
-                    </span>
-                  )
-                })}
-              </div>
-            )}
-            {showTagPicker && (
-              <div style={{ background: 'var(--bg)', borderRadius: 12, padding: '12px', border: '1px solid var(--line)' }}>
-                {Object.entries(ALL_TAGS).map(([category, tags]) => {
-                  const color = TAG_COLORS[category]
-                  return (
-                    <div key={category} style={{ marginBottom: 10 }}>
-                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color, marginBottom: 5 }}>{category}</p>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                        {tags.map(tag => {
-                          const active = activeTagNames.has(tag)
-                          return (
-                            <button key={tag} onClick={() => toggleSessionTag(tag)} style={{
-                              padding: '3px 10px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
-                              border: `1px solid ${active ? color : 'var(--line)'}`,
-                              background: active ? `${color}18` : 'transparent',
-                              color: active ? color : 'var(--ink-3)',
-                              fontSize: 11, fontWeight: active ? 700 : 400, transition: 'all 0.1s',
-                            }}>{tag}</button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Notes */}
-          <div style={{ marginBottom: 20 }}>
-            <SLabel>Notes</SLabel>
+        ) : (
+          <div style={{ padding: '10px 12px' }}>
             <textarea
-              value={notes} onChange={e => setNotes(e.target.value)} onBlur={saveNotes}
+              value={editContent}
+              onChange={e => setEditContent(e.target.value)}
               placeholder="Add observations, ideas, ratios..."
               rows={4}
-              style={{ width: '100%', marginTop: 8, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--bg)', color: 'var(--ink)', fontSize: 13, lineHeight: 1.6, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }}
+              autoFocus
+              style={{ width: '100%', padding: '8px 0', border: 'none', background: 'transparent', color: 'var(--ink)', fontSize: 13, lineHeight: 1.6, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }}
             />
-            {saving && <p style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 3 }}>Saving...</p>}
-          </div>
-
-          {/* Dishes */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <SLabel>Dishes · {dishes.length}</SLabel>
-              <button onClick={() => setShowNewDish(true)} style={{
-                background: 'none', border: 'none', color: 'var(--green)', fontSize: 12,
-                fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 3,
-              }}>
-                + New Dish
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button
+                onClick={() => saveNote(note.id)}
+                disabled={savingNote}
+                style={{ padding: '6px 14px', borderRadius: 999, border: 'none', background: 'var(--green)', color: '#FBF7F0', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                {savingNote ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                onClick={() => handleDeleteTap(note.id)}
+                style={{ padding: '6px 14px', borderRadius: 999, border: '1px solid var(--line)', background: 'transparent', color: deletingNoteId === note.id ? 'var(--coral)' : 'var(--ink-4)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'color 0.15s' }}
+              >
+                {deletingNoteId === note.id ? 'Confirm delete?' : 'Delete'}
               </button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {dishes.map(dish => (
-                <button
-                  key={dish.id}
-                  onClick={() => router.push(`/sessions/${sessionId}/dishes/${dish.id}`)}
-                  style={{
-                    textAlign: 'left', padding: '12px 14px', borderRadius: 12,
-                    border: '1px solid var(--line)', background: 'var(--bg)',
-                    cursor: 'pointer', width: '100%', transition: 'all 0.15s',
-                  }}
-                >
-                  {dish.category && (
-                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink-4)', display: 'block', marginBottom: 3 }}>
-                      {dish.category}
-                    </span>
-                  )}
-                  <p style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 14, fontWeight: 700, color: 'var(--ink)', margin: 0 }}>
-                    {dish.name}
-                  </p>
-                  <p style={{ fontSize: 11, color: 'var(--ink-4)', margin: '3px 0 0' }}>
-                    {new Date(dish.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </p>
-                </button>
-              ))}
-              {dishes.length === 0 && (
-                <p style={{ fontSize: 12, color: 'var(--ink-4)' }}>No dishes logged yet.</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        {session.status === 'open' && (
-          <div style={{ padding: '12px 20px', borderTop: '1px solid var(--line)', display: 'flex', gap: 8 }}>
-            <button onClick={() => setShowNewDish(true)} style={{
-              flex: 1, padding: '10px', borderRadius: 12, border: 'none',
-              background: 'var(--green)', color: '#FBF7F0',
-              fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              + Log Dish
-            </button>
-            <button onClick={closeSession} style={{
-              padding: '10px 14px', borderRadius: 12, border: '1px solid var(--line)',
-              background: 'transparent', color: 'var(--ink-3)',
-              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              Close
-            </button>
           </div>
         )}
       </div>
+    )
+  })
 
-      {/* Right panel: graph */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+  const NotesSection = (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+        <button onClick={createNote} style={{ background: 'none', border: 'none', color: 'var(--green)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+          + New Note
+        </button>
+      </div>
+      {notesList.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-4)', marginBottom: 8 }}>No notes yet.</p>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{noteRows}</div>
+    </div>
+  )
 
-        {/* Mode toggle + search */}
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <div style={{ display: 'flex', borderRadius: 999, border: '1px solid var(--line)', overflow: 'hidden', flexShrink: 0 }}>
-            <button onClick={() => { setHubMode(true); refreshHub(ingredients) }} style={{
-              padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
-              background: hubMode ? 'var(--green)' : 'transparent',
-              color: hubMode ? '#FBF7F0' : 'var(--ink-3)',
-              fontFamily: 'inherit', transition: 'all 0.15s',
-            }}>Hub</button>
-            <button onClick={() => setHubMode(false)} style={{
-              padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
-              background: !hubMode ? 'var(--ink)' : 'transparent',
-              color: !hubMode ? '#FBF7F0' : 'var(--ink-3)',
-              fontFamily: 'inherit', transition: 'all 0.15s',
-            }}>Search</button>
-          </div>
+  const DishesSection = (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <SLabel>Dishes · {dishes.length}</SLabel>
+        <button onClick={() => setShowNewDish(true)} style={{ background: 'none', border: 'none', color: 'var(--green)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+          + Add Dish
+        </button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {dishes.map(dish => (
+          <button key={dish.id} onClick={() => router.push(`/sessions/${sessionId}/dishes/${dish.id}`)} style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--bg)', cursor: 'pointer', width: '100%' }}>
+            {dish.category && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink-4)', display: 'block', marginBottom: 3 }}>{dish.category}</span>}
+            <p style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 14, fontWeight: 700, color: 'var(--ink)', margin: 0 }}>{dish.name}</p>
+            <p style={{ fontSize: 11, color: 'var(--ink-4)', margin: '3px 0 0' }}>{new Date(dish.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+          </button>
+        ))}
+        {dishes.length === 0 && <p style={{ fontSize: 12, color: 'var(--ink-4)' }}>No dishes logged yet.</p>}
+      </div>
+    </div>
+  )
 
-          {!hubMode && (
-            <div style={{ flex: 1, display: 'flex', gap: 8 }}>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg)', border: '1px solid var(--line-2)', borderRadius: 999, padding: '0 14px' }}>
-                <span style={{ color: 'var(--ink-4)', fontSize: 14 }}>⌕</span>
-                <input
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && searchIngredient(searchQuery)}
-                  placeholder="Search ingredient database..."
-                  style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: 'var(--ink)', padding: '10px 0', fontFamily: 'inherit' }}
-                />
-              </div>
-              <button onClick={() => searchIngredient(searchQuery)} disabled={searchLoading} style={{
-                padding: '10px 16px', background: 'var(--green)', color: '#FBF7F0',
-                border: 'none', borderRadius: 999, fontSize: 13, fontWeight: 600,
-                cursor: searchLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
-              }}>
-                {searchLoading ? '...' : 'Search'}
+  const HubSection = (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <SLabel>Flavor Hub · {ingredients.length}</SLabel>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+          {ingredients.map(ing => (
+            <div key={ing.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 999, background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, fontWeight: 500, color: 'var(--ink-2)' }}>
+              <button onClick={() => { setHubMode(false); searchIngredient(ing.ingredient_name); setSearchQuery(ing.ingredient_name) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontFamily: 'inherit', fontSize: 'inherit', padding: 0 }}>
+                {ing.ingredient_name}
               </button>
-              {searchResult && !ingredients.some(i => i.ingredient_name.toLowerCase() === searchResult.ingredient.toLowerCase()) && (
-                <button onClick={addSearchedIngredientToHub} style={{
-                  padding: '10px 14px', background: 'var(--surface)', color: 'var(--ink-2)',
-                  border: '1px solid var(--line)', borderRadius: 999, fontSize: 12, fontWeight: 600,
-                  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-                }}>
-                  + Add {searchResult.ingredient}
-                </button>
-              )}
+              <button onClick={() => removeIngredient(ing.id)} style={{ background: 'none', border: 'none', color: 'var(--ink-4)', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
             </div>
-          )}
+          ))}
+          {ingredients.length === 0 && <p style={{ fontSize: 12, color: 'var(--ink-4)' }}>No ingredients yet.</p>}
+        </div>
+      </div>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <SLabel>Tags · {sessionTags.length}</SLabel>
+          <button onClick={() => setShowTagPicker(p => !p)} style={{ background: 'none', border: 'none', color: 'var(--green)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {showTagPicker ? 'Done' : '+ Edit'}
+          </button>
+        </div>
+        {!showTagPicker && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {sessionTags.length === 0 && <p style={{ fontSize: 12, color: 'var(--ink-4)' }}>No tags yet.</p>}
+            {sessionTags.map(t => {
+              const cat = Object.entries(ALL_TAGS).find(([, tags]) => tags.includes(t.tag_name))?.[0]
+              const color = cat ? TAG_COLORS[cat] : 'var(--ink-3)'
+              return <span key={t.id} style={{ padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: `${color}18`, color, border: `1px solid ${color}40` }}>{t.tag_name}</span>
+            })}
+          </div>
+        )}
+        {showTagPicker && (
+          <div style={{ background: 'var(--bg)', borderRadius: 12, padding: 12, border: '1px solid var(--line)' }}>
+            {Object.entries(ALL_TAGS).map(([category, tags]) => {
+              const color = TAG_COLORS[category]
+              return (
+                <div key={category} style={{ marginBottom: 10 }}>
+                  <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color, marginBottom: 5 }}>{category}</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {tags.map(tag => {
+                      const active = activeTagNames.has(tag)
+                      return <button key={tag} onClick={() => toggleSessionTag(tag)} style={{ padding: '3px 10px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${active ? color : 'var(--line)'}`, background: active ? `${color}18` : 'transparent', color: active ? color : 'var(--ink-3)', fontSize: 11, fontWeight: active ? 700 : 400 }}>{tag}</button>
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 
-          {hubMode && ingredients.length >= 2 && (
-            <p style={{ fontSize: 12, color: 'var(--ink-4)', lineHeight: 1.4 }}>
-              Common pairings across <strong style={{ color: 'var(--ink-2)' }}>{ingredients.map(i => i.ingredient_name).join(', ')}</strong>
-            </p>
+  const tabContent: Record<TabKey, React.ReactNode> = { Hub: HubSection, Notes: NotesSection, Dishes: DishesSection }
+
+  const GraphArea = (
+    <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+      {graphLoading && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10, color: 'var(--ink-3)' }}>
+          <Spinner /> Computing pairings…
+        </div>
+      )}
+      {!graphLoading && !graphIngredient && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--ink-4)', textAlign: 'center', padding: 40 }}>
+          <span style={{ fontSize: 36 }}>🌿</span>
+          <p style={{ fontSize: 14, maxWidth: 260, lineHeight: 1.6 }}>
+            {hubMode ? 'Add ingredients to your hub to see common pairings.' : 'Search an ingredient to explore its pairings.'}
+          </p>
+        </div>
+      )}
+      {!graphLoading && graphIngredient && graphPairings.length > 0 && (
+        <PairingGraph ingredient={graphIngredient} pairings={graphPairings} sessionId={sessionId} onAddToSession={addToHub} />
+      )}
+      {!graphLoading && graphIngredient && graphPairings.length === 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--ink-4)', textAlign: 'center', padding: 40 }}>
+          <span style={{ fontSize: 36 }}>🔎</span>
+          <p style={{ fontSize: 14, maxWidth: 280, lineHeight: 1.6 }}>No common pairings found. Try removing an ingredient or searching individually.</p>
+        </div>
+      )}
+    </div>
+  )
+
+  return (
+    <>
+      {/* ── Mobile layout ──────────────────────────────────────────────────── */}
+      <div className="md:hidden" style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg)', overflow: 'hidden' }}>
+
+        {/* Mobile header */}
+        <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
+          <button onClick={() => router.push('/sessions')} style={{ background: 'none', border: 'none', color: 'var(--ink-4)', cursor: 'pointer', fontSize: 12, marginBottom: 6, padding: 0, fontFamily: 'inherit' }}>
+            ← Sessions
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <h1 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 17, fontWeight: 700, color: 'var(--ink)', lineHeight: 1.2, margin: 0 }}>{session.name}</h1>
+            <span className={`status-badge status-${session.status}`} style={{ flexShrink: 0 }}>
+              {session.status === 'open' ? 'Open' : 'Closed'}
+            </span>
+          </div>
+        </div>
+
+        {/* Graph mode toggle */}
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <div style={{ display: 'flex', borderRadius: 999, border: '1px solid var(--line)', overflow: 'hidden', flexShrink: 0 }}>
+            <button onClick={() => { setHubMode(true); refreshHub(ingredients) }} style={{ padding: '6px 12px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: hubMode ? 'var(--green)' : 'transparent', color: hubMode ? '#FBF7F0' : 'var(--ink-3)', fontFamily: 'inherit', transition: 'all 0.15s' }}>Hub</button>
+            <button onClick={() => setHubMode(false)} style={{ padding: '6px 12px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: !hubMode ? 'var(--ink)' : 'transparent', color: !hubMode ? '#FBF7F0' : 'var(--ink-3)', fontFamily: 'inherit', transition: 'all 0.15s' }}>Search</button>
+          </div>
+          {!hubMode && (
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && searchIngredient(searchQuery)}
+              placeholder="Search ingredient…"
+              style={{ flex: 1, border: '1px solid var(--line-2)', borderRadius: 999, padding: '6px 12px', background: 'var(--bg)', color: 'var(--ink)', fontSize: 13, fontFamily: 'inherit', outline: 'none' }}
+            />
           )}
         </div>
 
-        {/* Graph */}
-        <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-          {graphLoading && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10, color: 'var(--ink-3)' }}>
-              <Spinner /> Computing pairings...
+        {/* Graph fills remaining space */}
+        {GraphArea}
+
+        {/* Collapsible bottom panel */}
+        <div style={{
+          height: activeTab ? '55vh' : '52px',
+          transition: 'height 280ms cubic-bezier(0.32, 0, 0.16, 1)',
+          background: 'var(--surface)',
+          borderTop: '1px solid var(--line)',
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}>
+          {/* Drag handle */}
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 0', flexShrink: 0 }}>
+            <div style={{ width: 28, height: 4, borderRadius: 999, background: 'var(--line-strong)' }} />
+          </div>
+
+          {/* Tab bar */}
+          <div style={{ display: 'flex', flexShrink: 0, borderBottom: activeTab ? '1px solid var(--line)' : 'none' }}>
+            {TABS.map(tab => {
+              const count = tab === 'Hub' ? ingredients.length : tab === 'Notes' ? notesList.length : dishes.length
+              return (
+                <button
+                  key={tab}
+                  onClick={() => handleTabTap(tab)}
+                  style={{
+                    flex: 1, padding: '8px 0', border: 'none', background: 'none',
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    color: activeTab === tab ? 'var(--green)' : 'var(--ink-3)',
+                    borderBottom: activeTab === tab ? '2px solid var(--green)' : '2px solid transparent',
+                    transition: 'color 0.15s, border-color 0.15s',
+                  }}
+                >
+                  {tab}{count > 0 && <span style={{ marginLeft: 4, fontSize: 11, opacity: 0.6 }}>{count}</span>}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Tab content */}
+          {activeTab && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}>
+              {tabContent[activeTab]}
             </div>
           )}
-          {!graphLoading && !graphIngredient && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--ink-4)', textAlign: 'center', padding: 40 }}>
-              <span style={{ fontSize: 36 }}>🌿</span>
-              <p style={{ fontSize: 14, maxWidth: 260, lineHeight: 1.6 }}>
-                {hubMode ? 'Add ingredients to your hub to see common pairings.' : 'Search an ingredient to explore its pairings.'}
+        </div>
+      </div>
+
+      {/* ── Desktop layout (unchanged) ─────────────────────────────────────── */}
+      <div className="hidden md:flex" style={{ height: '100vh', background: 'var(--bg)', overflow: 'hidden' }}>
+
+        {/* Left panel */}
+        <div style={{ width: 320, flexShrink: 0, borderRight: '1px solid var(--line)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+          {/* Header */}
+          <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--line)' }}>
+            <button onClick={() => router.push('/sessions')} style={{ background: 'none', border: 'none', color: 'var(--ink-4)', cursor: 'pointer', fontSize: 12, marginBottom: 8, padding: 0, fontFamily: 'inherit' }}>
+              ← Sessions
+            </button>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+              <h1 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 19, fontWeight: 700, color: 'var(--ink)', lineHeight: 1.2, margin: 0 }}>{session.name}</h1>
+              <span className={`status-badge status-${session.status}`} style={{ flexShrink: 0, marginTop: 2 }}>
+                {session.status === 'open' ? 'Open' : 'Closed'}
+              </span>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 4 }}>
+              {session.category && <span style={{ marginRight: 8 }}>🏷 {session.category}</span>}
+              {new Date(session.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </p>
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+
+            {/* Hub ingredients */}
+            <div style={{ marginBottom: 20 }}>
+              <SLabel>Flavor Hub · {ingredients.length}</SLabel>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {ingredients.map(ing => (
+                  <div key={ing.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 999, background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 12, fontWeight: 500, color: 'var(--ink-2)' }}>
+                    <button onClick={() => { setHubMode(false); searchIngredient(ing.ingredient_name); setSearchQuery(ing.ingredient_name) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontFamily: 'inherit', fontSize: 'inherit', padding: 0 }}>
+                      {ing.ingredient_name}
+                    </button>
+                    <button onClick={() => removeIngredient(ing.id)} style={{ background: 'none', border: 'none', color: 'var(--ink-4)', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
+                  </div>
+                ))}
+                {ingredients.length === 0 && <p style={{ fontSize: 12, color: 'var(--ink-4)' }}>No ingredients yet.</p>}
+              </div>
+            </div>
+
+            {/* Session tags */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <SLabel>Tags · {sessionTags.length}</SLabel>
+                <button onClick={() => setShowTagPicker(p => !p)} style={{ background: 'none', border: 'none', color: 'var(--green)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {showTagPicker ? 'Done' : '+ Edit'}
+                </button>
+              </div>
+              {!showTagPicker && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {sessionTags.length === 0 && <p style={{ fontSize: 12, color: 'var(--ink-4)' }}>No tags yet.</p>}
+                  {sessionTags.map(t => {
+                    const cat = Object.entries(ALL_TAGS).find(([, tags]) => tags.includes(t.tag_name))?.[0]
+                    const color = cat ? TAG_COLORS[cat] : 'var(--ink-3)'
+                    return <span key={t.id} style={{ padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: `${color}18`, color, border: `1px solid ${color}40` }}>{t.tag_name}</span>
+                  })}
+                </div>
+              )}
+              {showTagPicker && (
+                <div style={{ background: 'var(--bg)', borderRadius: 12, padding: 12, border: '1px solid var(--line)' }}>
+                  {Object.entries(ALL_TAGS).map(([category, tags]) => {
+                    const color = TAG_COLORS[category]
+                    return (
+                      <div key={category} style={{ marginBottom: 10 }}>
+                        <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color, marginBottom: 5 }}>{category}</p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                          {tags.map(tag => {
+                            const active = activeTagNames.has(tag)
+                            return <button key={tag} onClick={() => toggleSessionTag(tag)} style={{ padding: '3px 10px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${active ? color : 'var(--line)'}`, background: active ? `${color}18` : 'transparent', color: active ? color : 'var(--ink-3)', fontSize: 11, fontWeight: active ? 700 : 400, transition: 'all 0.1s' }}>{tag}</button>
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Notes */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <SLabel>Notes</SLabel>
+                <button onClick={createNote} style={{ background: 'none', border: 'none', color: 'var(--green)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  + New Note
+                </button>
+              </div>
+              {notesList.length === 0 && <p style={{ fontSize: 12, color: 'var(--ink-4)', marginBottom: 4 }}>No notes yet.</p>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{noteRows}</div>
+            </div>
+
+            {/* Dishes */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <SLabel>Dishes · {dishes.length}</SLabel>
+                <button onClick={() => setShowNewDish(true)} style={{ background: 'none', border: 'none', color: 'var(--green)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  + Add Dish
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {dishes.map(dish => (
+                  <button key={dish.id} onClick={() => router.push(`/sessions/${sessionId}/dishes/${dish.id}`)} style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--bg)', cursor: 'pointer', width: '100%', transition: 'all 0.15s' }}>
+                    {dish.category && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink-4)', display: 'block', marginBottom: 3 }}>{dish.category}</span>}
+                    <p style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: 14, fontWeight: 700, color: 'var(--ink)', margin: 0 }}>{dish.name}</p>
+                    <p style={{ fontSize: 11, color: 'var(--ink-4)', margin: '3px 0 0' }}>{new Date(dish.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                  </button>
+                ))}
+                {dishes.length === 0 && <p style={{ fontSize: 12, color: 'var(--ink-4)' }}>No dishes logged yet.</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          {session.status === 'open' && (
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--line)', display: 'flex', gap: 8 }}>
+              <button onClick={() => setShowNewDish(true)} style={{ flex: 1, padding: '10px', borderRadius: 12, border: 'none', background: 'var(--green)', color: '#FBF7F0', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                + Log Dish
+              </button>
+              <button onClick={closeSession} style={{ padding: '10px 14px', borderRadius: 12, border: '1px solid var(--line)', background: 'transparent', color: 'var(--ink-3)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Close
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Right panel: graph */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+          {/* Mode toggle + search */}
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            <div style={{ display: 'flex', borderRadius: 999, border: '1px solid var(--line)', overflow: 'hidden', flexShrink: 0 }}>
+              <button onClick={() => { setHubMode(true); refreshHub(ingredients) }} style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: hubMode ? 'var(--green)' : 'transparent', color: hubMode ? '#FBF7F0' : 'var(--ink-3)', fontFamily: 'inherit', transition: 'all 0.15s' }}>Hub</button>
+              <button onClick={() => setHubMode(false)} style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: !hubMode ? 'var(--ink)' : 'transparent', color: !hubMode ? '#FBF7F0' : 'var(--ink-3)', fontFamily: 'inherit', transition: 'all 0.15s' }}>Search</button>
+            </div>
+
+            {!hubMode && (
+              <div style={{ flex: 1, display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg)', border: '1px solid var(--line-2)', borderRadius: 999, padding: '0 14px' }}>
+                  <span style={{ color: 'var(--ink-4)', fontSize: 14 }}>⌕</span>
+                  <input
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && searchIngredient(searchQuery)}
+                    placeholder="Search ingredient database…"
+                    style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: 'var(--ink)', padding: '10px 0', fontFamily: 'inherit' }}
+                  />
+                </div>
+                <button onClick={() => searchIngredient(searchQuery)} disabled={searchLoading} style={{ padding: '10px 16px', background: 'var(--green)', color: '#FBF7F0', border: 'none', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: searchLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                  {searchLoading ? '…' : 'Search'}
+                </button>
+                {searchResult && !ingredients.some(i => i.ingredient_name.toLowerCase() === searchResult!.ingredient.toLowerCase()) && (
+                  <button onClick={addSearchedIngredientToHub} style={{ padding: '10px 14px', background: 'var(--surface)', color: 'var(--ink-2)', border: '1px solid var(--line)', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                    + Add {searchResult.ingredient}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {hubMode && ingredients.length >= 2 && (
+              <p style={{ fontSize: 12, color: 'var(--ink-4)', lineHeight: 1.4 }}>
+                Common pairings across <strong style={{ color: 'var(--ink-2)' }}>{ingredients.map(i => i.ingredient_name).join(', ')}</strong>
               </p>
-            </div>
-          )}
-          {!graphLoading && graphIngredient && graphPairings.length > 0 && (
-            <PairingGraph
-              ingredient={graphIngredient}
-              pairings={graphPairings}
-              sessionId={sessionId}
-              onAddToSession={addToHub}
-            />
-          )}
-          {!graphLoading && graphIngredient && graphPairings.length === 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--ink-4)', textAlign: 'center', padding: 40 }}>
-              <span style={{ fontSize: 36 }}>🔎</span>
-              <p style={{ fontSize: 14, maxWidth: 280, lineHeight: 1.6 }}>No common pairings found. Try removing an ingredient from the hub or searching individually.</p>
-            </div>
-          )}
+            )}
+          </div>
+
+          {GraphArea}
         </div>
       </div>
 
@@ -448,13 +656,14 @@ export default function SessionPage() {
           }}
         />
       )}
-    </div>
+    </>
   )
 }
 
 function SLabel({ children }: { children: React.ReactNode }) {
   return <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-3)', margin: 0 }}>{children}</p>
 }
+
 function Spinner() {
   return (
     <>
