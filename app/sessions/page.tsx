@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import NewSessionModal from '@/components/NewSessionModal'
-import { Icon, FoodArt, FoodArtProps } from '@/components/Icons'
+import { Icon } from '@/components/Icons'
 
 interface Session {
   id: string; name: string; status: string
@@ -14,34 +14,76 @@ interface SessionTag { session_id: string; tag_name: string }
 
 const QUICK_TAGS = ['Umami', 'Smoky', 'Rich', 'Bright', 'Spicy', 'Sweet', 'Savory', 'Earthy', 'Bold']
 
-const PALETTES: FoodArtProps['palette'][] = [
-  ['#3D2C1F', '#6B4A2B', '#A77B4E', '#1C1C1A'],
-  ['#E8E1C9', '#C5D4A4', '#FAF7EE', '#7C8C5B'],
-  ['#8B3A1F', '#D4A24C', '#C16E2D', '#3A1F12'],
-  ['#F2DC8E', '#E8B746', '#FBF5DA', '#A07924'],
-  ['#2A2326', '#5C4A56', '#D4C5C2', '#1A1518'],
+// ─── Color swatches for card thumbnails ──────────────────────────────────────
+// Two-stop gradients — warm, muted, on-brand
+const CARD_COLORS: [string, string][] = [
+  ['#C8A86B', '#A07843'],  // gold
+  ['#C97B5A', '#9A5238'],  // terracotta
+  ['#7FA89C', '#557A70'],  // sage
+  ['#8EAFC4', '#5E8099'],  // slate blue
+  ['#B09080', '#7A5E50'],  // warm taupe
+  ['#8AAE8A', '#5A7E5A'],  // muted green
+  ['#C4AFA8', '#8E7870'],  // dusty rose
+  ['#9AABB8', '#627080'],  // cool grey blue
+  ['#B8A070', '#806830'],  // amber
+  ['#A89070', '#705840'],  // sand
 ]
-const GLYPHS = ['octopus', 'leaf', 'circle', 'grain', 'dot'] as const
 
 function hashStr(s: string): number {
   let h = 0
   for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0
   return Math.abs(h)
 }
-function artFor(id: string) {
-  const h = hashStr(id)
-  return { palette: PALETTES[h % PALETTES.length], glyph: GLYPHS[h % GLYPHS.length] }
+
+function colorFor(id: string): [string, string] {
+  return CARD_COLORS[hashStr(id) % CARD_COLORS.length]
 }
 
+// Derives a 1–2 letter monogram from the session name
+function monogram(name: string): string {
+  const words = name.trim().split(/\s+/)
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase()
+  return name.slice(0, 2).toUpperCase()
+}
+
+// ─── Color thumbnail — replaces FoodArt ──────────────────────────────────────
+function SessionSwatch({ sessionId, name }: { sessionId: string; name: string }) {
+  const [from, to] = colorFor(sessionId)
+  return (
+    <div style={{
+      width: 76,
+      flexShrink: 0,
+      borderRadius: '17px 0 0 17px',
+      background: `linear-gradient(145deg, ${from}, ${to})`,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 84,
+    }}>
+      <span style={{
+        fontFamily: 'var(--serif)',
+        fontSize: 20,
+        fontWeight: 400,
+        color: 'rgba(255,255,255,0.75)',
+        letterSpacing: '0.04em',
+        userSelect: 'none',
+      }}>
+        {monogram(name)}
+      </span>
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function SessionsPage() {
   const router = useRouter()
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [sessionTags, setSessionTags] = useState<SessionTag[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
+  const [sessions, setSessions]         = useState<Session[]>([])
+  const [sessionTags, setSessionTags]   = useState<SessionTag[]>([])
+  const [loading, setLoading]           = useState(true)
+  const [search, setSearch]             = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all')
   const [activeTagFilter, setActiveTagFilter] = useState<string[]>([])
-  const [showNewSession, setShowNewSession] = useState(false)
+  const [showNewSession, setShowNewSession]   = useState(false)
 
   useEffect(() => { loadAll() }, [])
 
@@ -70,9 +112,9 @@ export default function SessionsPage() {
     }
     if (search.trim()) {
       const q = search.toLowerCase()
-      const inName = s.name.toLowerCase().includes(q)
+      const inName  = s.name.toLowerCase().includes(q)
       const inNotes = s.notes?.toLowerCase().includes(q)
-      const inTags = (tagMap[s.id] || []).some(t => t.toLowerCase().includes(q))
+      const inTags  = (tagMap[s.id] || []).some(t => t.toLowerCase().includes(q))
       if (!inName && !inNotes && !inTags) return false
     }
     return true
@@ -136,7 +178,8 @@ export default function SessionsPage() {
           )
         })}
         {hasFilters && (
-          <button onClick={() => { setActiveTagFilter([]); setStatusFilter('all'); setSearch('') }}
+          <button
+            onClick={() => { setActiveTagFilter([]); setStatusFilter('all'); setSearch('') }}
             style={{ background: 'none', border: 'none', color: 'var(--tier-twist)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', padding: '0 8px', flexShrink: 0 }}
           >
             Clear all
@@ -173,7 +216,6 @@ export default function SessionsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map(session => {
             const tags = tagMap[session.id] || []
-            const art = artFor(session.id)
             return (
               <button
                 key={session.id}
@@ -188,10 +230,8 @@ export default function SessionsPage() {
                 onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-1px)'; el.style.boxShadow = 'var(--shadow-2)' }}
                 onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = ''; el.style.boxShadow = 'var(--shadow-1)' }}
               >
-                {/* FoodArt thumbnail */}
-                <div style={{ width: 76, flexShrink: 0, overflow: 'hidden', borderRadius: '17px 0 0 17px' }}>
-                  <FoodArt palette={art.palette} glyph={art.glyph} style={{ height: '100%', minHeight: 84 }} />
-                </div>
+                {/* Color swatch — replaces FoodArt */}
+                <SessionSwatch sessionId={session.id} name={session.name} />
 
                 {/* Content */}
                 <div style={{ flex: 1, minWidth: 0, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6, justifyContent: 'center' }}>
