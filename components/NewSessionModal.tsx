@@ -60,16 +60,30 @@ export default function NewSessionModal({
     setLoading(true); setError(null)
 
     try {
+      // ── Get current user — required for RLS user_id stamp ──────────────
+      const { data: { user }, error: userErr } = await supabase.auth.getUser()
+      if (userErr || !user) throw new Error('Not authenticated. Please sign in.')
+
+      // ── Insert session with user_id ────────────────────────────────────
       const { data: session, error: sErr } = await supabase
         .from('sessions')
-        .insert({ name: name.trim(), category: selectedCat || null, status: 'open' })
-        .select().single()
+        .insert({
+          name: name.trim(),
+          category: selectedCat || null,
+          status: 'open',
+          user_id: user.id,   // ← stamps ownership for RLS
+        })
+        .select()
+        .single()
       if (sErr) throw sErr
 
-      await supabase.from('session_ingredients').insert(
-        ingredients.map(n => ({ session_id: session.id, ingredient_name: n }))
-      )
+      // ── Session ingredients ────────────────────────────────────────────
+      const { error: ingErr } = await supabase
+        .from('session_ingredients')
+        .insert(ingredients.map(n => ({ session_id: session.id, ingredient_name: n })))
+      if (ingErr) throw ingErr
 
+      // ── Auto-tags ──────────────────────────────────────────────────────
       const tags = await fetchIngredientTags(ingredients)
       if (tags.length > 0) {
         const uniqueTags = [...new Set(tags)]
@@ -80,9 +94,9 @@ export default function NewSessionModal({
 
       router.push(`/sessions/${session.id}`)
       onClose()
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      setError('Something went wrong. Please try again.')
+      setError(err?.message ?? 'Something went wrong. Please try again.')
     } finally {
       setLoading(false)
     }
