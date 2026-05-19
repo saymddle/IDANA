@@ -1,8 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1&family=Inter:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=Caveat:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* ── Idana canvas tokens ────────────────────────────────────────────────────── */
+@theme {
+  --idana-charcoal: #1C1A17;
+  --idana-cream: #F2EBD9;
+  --idana-clay: #8B5E3C;
+  --idana-umber: #3D2B1F;
+  --idana-ash: #C4B9A8;
+  --idana-hibiscus: #C0394B;
+  --idana-tamarind: #D4622A;
+  --idana-indigo: #3B4A8A;
+  --idana-gold: #C89B3C;
+  --idana-palm: #5A7A4A;
+  --idana-canvas-bg: #F5EFE3;
+  --idana-dot: rgba(60, 40, 20, 0.12);
+  --idana-font-display: 'Playfair Display', Georgia, serif;
+  --idana-font-body: 'DM Sans', system-ui, sans-serif;
+  --idana-font-mono: 'JetBrains Mono', monospace;
+}
+
+.idana-canvas-root *,
+.idana-canvas-root *::before,
+.idana-canvas-root *::after {
+  box-sizing: border-box;
+}
+
+.react-flow__background {
+  background: var(--idana-canvas-bg) !important;
+}
+
+.react-flow__pane {
+  cursor: default !important;
+}
+
+.react-flow__selection {
+  background: rgba(139, 94, 60, 0.06) !important;
+  border: 1px solid rgba(139, 94, 60, 0.3) !important;
+}
+
+.react-flow__nodesselection-rect {
+  background: rgba(139, 94, 60, 0.06) !important;
+  border: 1px solid rgba(139, 94, 60, 0.3) !important;
+}
 
 /* ── Design tokens ──────────────────────────────────────────────────────────── */
 :root {
@@ -208,7 +250,6 @@ input, textarea { font-family: inherit; color: inherit; }
 .body-sm { font-size: 13px; line-height: 1.4;  color: var(--muted); }
 
 /* ── React Flow ─────────────────────────────────────────────────────────────── */
-.react-flow__background { background-color: var(--bg) !important; }
 .react-flow__edge-path  { stroke: var(--line-2) !important; }
 .react-flow__controls, .react-flow__attribution { display: none !important; }
 

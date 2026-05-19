@@ -63,7 +63,9 @@ export default function Sidebar() {
           background: 'transparent', border: '1px solid var(--line)',
           color: 'var(--muted)', cursor: 'pointer', display: 'grid', placeItems: 'center',
         }}>
-          {theme === 'light' ? <MoonIcon size={18} /> : <SunIcon size={18} />}
+          <span suppressHydrationWarning>
+            {theme === 'light' ? <MoonIcon size={18} /> : <SunIcon size={18} />}
+          </span>
         </button>
 
         <button onClick={() => setShowModal(true)} title="New session" style={{
