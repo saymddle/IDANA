@@ -5,7 +5,7 @@
 // Redirects to ?next= param or / after successful auth.
 // Uses the BROWSER supabase client (lib/supabase.ts) — correct for client components.
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -13,6 +13,14 @@ type Mode = 'magic' | 'password'
 type PasswordStep = 'login' | 'signup'
 
 export default function AuthPage() {
+  return (
+    <Suspense>
+      <AuthForm />
+    </Suspense>
+  )
+}
+
+function AuthForm() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const next         = searchParams.get('next') || '/'
