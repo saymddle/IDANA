@@ -111,7 +111,6 @@ export default function VoiceNoteNode({ data, selected }: NodeProps) {
     if (!audioRef.current) {
       const audio = new Audio()
       audio.src = audioUrl
-      if (audioMime) audio.type = audioMime
 
       audio.ontimeupdate = () => {
         if (audio.duration && !isNaN(audio.duration)) {
