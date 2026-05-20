@@ -207,7 +207,7 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
           x: center.x - 140,
           y: center.y - 80,
         },
-        data: defaultData[type] ?? { label: type },
+        data: (defaultData[type] ?? { label: type }) as Record<string, unknown>,
       }
 
       setNodes((nds) => [...nds, newNode])
