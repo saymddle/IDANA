@@ -6,7 +6,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const body = await req.json().catch(() => ({}))
 
   const { data: source, error: srcErr } = await supabase

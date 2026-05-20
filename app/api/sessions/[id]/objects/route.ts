@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   const [{ data: objects, error: objErr }, { data: edges, error: edgeErr }] = await Promise.all([
     supabase.from('canvas_objects').select('*').eq('session_id', id).order('created_at'),
@@ -24,7 +24,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { nodes, edges } = await req.json()
 
   await Promise.all([

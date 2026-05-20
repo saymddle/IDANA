@@ -17,7 +17,7 @@ export async function getAuthUser(): Promise<AuthUser | null> {
   }
 
   try {
-    const supabase = createSupabaseServerClient()
+    const supabase = await createSupabaseServerClient()
     const { data: { user }, error } = await supabase.auth.getUser()
     if (error || !user) return null
     return { id: user.id, email: user.email ?? '' }

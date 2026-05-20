@@ -6,8 +6,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-export function createSupabaseServerClient() {
-  const cookieStore = cookies()
+export async function createSupabaseServerClient() {
+  const cookieStore = await cookies()
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -33,8 +33,8 @@ export function createSupabaseServerClient() {
 
 // Service-role client — bypasses RLS. Use only in trusted server contexts.
 // Requires SUPABASE_SERVICE_ROLE_KEY in .env.local (never expose to browser).
-export function createSupabaseServiceClient() {
-  const cookieStore = cookies()
+export async function createSupabaseServiceClient() {
+  const cookieStore = await cookies()
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,

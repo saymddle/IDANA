@@ -6,7 +6,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string; versionId: string }> }
 ) {
   const { id, versionId } = await params
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   const { data: version, error: vErr } = await supabase
     .from('canvas_versions')

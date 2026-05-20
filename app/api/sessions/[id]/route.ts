@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   const { data: session, error } = await supabase
     .from('sessions')
@@ -29,7 +29,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const body = await req.json()
 
   const allowed = ['title', 'goal', 'tags', 'published', 'cover_photo']
@@ -55,7 +55,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   await Promise.all([
     supabase.from('canvas_objects').delete().eq('session_id', id),

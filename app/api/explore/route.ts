@@ -2,7 +2,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 
 export async function GET(req: Request) {
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { searchParams } = new URL(req.url)
   const tag = searchParams.get('tag')
   const q = searchParams.get('q')
