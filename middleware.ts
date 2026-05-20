@@ -54,6 +54,15 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  // Bearer token support for mobile / API clients (no cookie available)
+  if (pathname.startsWith('/api/')) {
+    const authHeader = request.headers.get('Authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      const { data: { user: bearerUser } } = await supabase.auth.getUser(authHeader.slice(7))
+      if (bearerUser) return response
+    }
+  }
+
   // getUser() validates the session JWT with Supabase — do not use getSession()
   // here as it only reads from cookie without server verification
   const { data: { user } } = await supabase.auth.getUser()
