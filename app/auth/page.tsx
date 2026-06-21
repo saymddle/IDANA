@@ -25,13 +25,17 @@ function AuthForm() {
   const searchParams = useSearchParams()
   const next         = searchParams.get('next') || '/'
 
+  const callbackError = searchParams.get('error')
+
   const [mode, setMode]           = useState<Mode>('magic')
   const [step, setStep]           = useState<PasswordStep>('login')
   const [email, setEmail]         = useState('')
   const [password, setPassword]   = useState('')
   const [loading, setLoading]     = useState(false)
   const [sent, setSent]           = useState(false)
-  const [error, setError]         = useState<string | null>(null)
+  const [error, setError]         = useState<string | null>(
+    callbackError === 'auth_callback_failed' ? 'Email link expired or already used. Please try again.' : null
+  )
 
   // If already logged in, skip to destination
   useEffect(() => {
@@ -53,7 +57,7 @@ function AuthForm() {
     setLoading(true); setError(null)
     const { error: err } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: `${window.location.origin}${next}` },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
     })
     setLoading(false)
     if (err) { setError(err.message); return }
@@ -66,7 +70,11 @@ function AuthForm() {
 
     const { error: err } = step === 'login'
       ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
-      : await supabase.auth.signUp({ email: email.trim(), password })
+      : await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
+        })
 
     setLoading(false)
     if (err) { setError(err.message); return }
