@@ -279,16 +279,19 @@ function NewSessionModalMulti({
   const handleCreate = async () => {
     setLoading(true)
     try {
-      const { supabase } = await import('@/lib/supabase')
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data: session, error } = await supabase
-        .from('sessions').insert({ name: name.trim(), category: category || null, status: 'open', user_id: user?.id }).select().single()
-      if (error) throw error
       const allIngredients = [ingredient, ...pairingNames]
-      await supabase.from('session_ingredients').insert(
-        allIngredients.map(n => ({ session_id: session.id, ingredient_name: n }))
-      )
-      router.push(`/sessions/${session.id}`)
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: name.trim(),
+          tags: category ? [category] : [],
+          goal: allIngredients.join(', '),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      router.push(`/sessions/${json.session.id}`)
       onClose()
     } finally { setLoading(false) }
   }
