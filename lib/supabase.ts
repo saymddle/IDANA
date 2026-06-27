@@ -1,7 +1,8 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 
-// Uses cookies (not localStorage) so the middleware can read the session server-side.
-export const supabase = createBrowserClient(
+// Browser client — used in client components for public/read-only queries.
+// Auth is handled by Clerk; all user-scoped data goes through API routes.
+export const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )

@@ -1,12 +1,17 @@
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 
 export async function GET() {
-  const supabase = await createSupabaseServerClient()
+  const { userId } = await auth()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const supabase = await createSupabaseServiceClient()
 
   const { data, error } = await supabase
     .from('sessions')
     .select('id, title, goal, tags, cover_photo, published, created_at, updated_at')
+    .eq('user_id', userId)
     .order('updated_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -36,16 +41,16 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { userId } = await auth()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const supabase = await createSupabaseServiceClient()
   const body = await req.json()
   const { title, goal, tags } = body
 
   const { data, error } = await supabase
     .from('sessions')
-    .insert({ title: title || 'Untitled Session', goal, tags: tags ?? [], published: false, user_id: user.id })
+    .insert({ title: title || 'Untitled Session', goal, tags: tags ?? [], published: false, user_id: userId })
     .select()
     .single()
 

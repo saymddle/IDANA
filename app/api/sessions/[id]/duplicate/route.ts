@@ -1,17 +1,22 @@
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { userId } = await auth()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { id } = await params
-  const supabase = await createSupabaseServerClient()
+  const supabase = await createSupabaseServiceClient()
 
   const { data: original, error: sessionErr } = await supabase
     .from('sessions')
     .select('*')
     .eq('id', id)
+    .eq('user_id', userId)
     .single()
 
   if (sessionErr || !original) {
@@ -25,7 +30,7 @@ export async function POST(
       goal: original.goal,
       tags: original.tags,
       published: false,
-      user_id: original.user_id,
+      user_id: userId,
     })
     .select()
     .single()
