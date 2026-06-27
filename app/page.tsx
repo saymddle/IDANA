@@ -319,8 +319,9 @@ function NewSessionModalMulti({
     setLoading(true)
     try {
       const { supabase } = await import('@/lib/supabase')
+      const { data: { user } } = await supabase.auth.getUser()
       const { data: session, error } = await supabase
-        .from('sessions').insert({ name: name.trim(), category: category || null, status: 'open' }).select().single()
+        .from('sessions').insert({ name: name.trim(), category: category || null, status: 'open', user_id: user?.id }).select().single()
       if (error) throw error
       const allIngredients = [ingredient, ...pairingNames]
       await supabase.from('session_ingredients').insert(

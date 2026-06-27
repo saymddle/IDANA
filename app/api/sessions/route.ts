@@ -37,12 +37,15 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const body = await req.json()
   const { title, goal, tags } = body
 
   const { data, error } = await supabase
     .from('sessions')
-    .insert({ title: title || 'Untitled Session', goal, tags: tags ?? [], published: false })
+    .insert({ title: title || 'Untitled Session', goal, tags: tags ?? [], published: false, user_id: user.id })
     .select()
     .single()
 
