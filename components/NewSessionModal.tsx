@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
 // ─── Two usage modes ───────────────────────────────────────────────────────────
@@ -28,19 +27,6 @@ const PRESET_CATEGORIES = [
   'Soups', 'Salads', 'Breakfast', 'Drinks', 'Snacks', 'Other',
 ]
 
-async function fetchIngredientTags(ingredientNames: string[]): Promise<string[]> {
-  try {
-    const res = await fetch('/api/ingredients/tags', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ingredients: ingredientNames }),
-    })
-    const data = await res.json()
-    return data.tags ?? []
-  } catch {
-    return []
-  }
-}
 
 export default function NewSessionModal({
   onCreate,
@@ -94,36 +80,20 @@ export default function NewSessionModal({
         return
       }
 
-      // ── Mode B: legacy ingredient-based session creation ─────────────
-      const { data: { user }, error: userErr } = await supabase.auth.getUser()
-      if (userErr || !user) throw new Error('Not authenticated. Please sign in.')
+      // ── Mode B: ingredient-based session creation via API ────────────
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim(),
+          tags: selectedCat ? [selectedCat] : [],
+          goal: ingredients.join(', '),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed to create session.')
 
-      const { data: session, error: sErr } = await supabase
-        .from('sessions')
-        .insert({
-          name:      title.trim(),
-          category:  selectedCat || null,
-          status:    'open',
-          user_id:   user.id,
-        })
-        .select()
-        .single()
-      if (sErr) throw sErr
-
-      const { error: ingErr } = await supabase
-        .from('session_ingredients')
-        .insert(ingredients.map(n => ({ session_id: session.id, ingredient_name: n })))
-      if (ingErr) throw ingErr
-
-      const tags = await fetchIngredientTags(ingredients)
-      if (tags.length > 0) {
-        const uniqueTags = [...new Set(tags)]
-        await supabase.from('session_tags').insert(
-          uniqueTags.map(tag => ({ session_id: session.id, tag_name: tag, source: 'auto' }))
-        )
-      }
-
-      router.push(`/sessions/${session.id}`)
+      router.push(`/sessions/${json.session.id}`)
       onClose()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong.'
