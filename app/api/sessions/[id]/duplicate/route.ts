@@ -25,6 +25,7 @@ export async function POST(
       goal: original.goal,
       tags: original.tags,
       published: false,
+      user_id: original.user_id,
     })
     .select()
     .single()
