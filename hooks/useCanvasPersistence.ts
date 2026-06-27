@@ -133,7 +133,8 @@ export function useCanvasPersistence({
     if (!enabled || !sessionId) return
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(saveNow, DEBOUNCE_MS)
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    // No cleanup return: let the timer fire even if the component unmounts
+    // (user navigates away), so the last unsaved changes are persisted.
   }, [nodes, edges, sessionId, enabled, saveNow])
 
   return { saveStatus, lastSaved, saveNow, versions, restoreVersion }

@@ -61,6 +61,7 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [minimapVisible, setMinimapVisible] = useState(false)
+  const [hasLoaded, setHasLoaded] = useState(false)
   const { screenToFlowPosition } = useReactFlow()
   const nodeIdCounter = useRef(1)
   const spawnPairingRef = useRef<((ingredientName: string, sourceNodeId: string) => void) | null>(null)
@@ -69,7 +70,7 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
     sessionId,
     nodes,
     edges,
-    enabled: true,
+    enabled: hasLoaded,
   })
 
   useEffect(() => {
@@ -102,6 +103,7 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
         }
       })
       .catch(err => console.error('Failed to load canvas:', err))
+      .finally(() => setHasLoaded(true))
   }, [sessionId, setNodes, setEdges])
 
   const handleRestoreVersion = useCallback(async (versionId: string) => {
