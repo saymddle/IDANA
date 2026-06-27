@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { ClerkProvider } from '@clerk/nextjs'
 import { ThemeProvider } from '@/context/ThemeContext'
 import Sidebar from '@/components/Sidebar'
 
@@ -16,15 +17,17 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body>
-        <ThemeProvider>
-          <Sidebar />
-          <main className="main-content">
-            {children}
-          </main>
-        </ThemeProvider>
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en" suppressHydrationWarning>
+        <body>
+          <ThemeProvider>
+            <Sidebar />
+            <main className="main-content">
+              {children}
+            </main>
+          </ThemeProvider>
+        </body>
+      </html>
+    </ClerkProvider>
   )
 }

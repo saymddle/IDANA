@@ -1,12 +1,16 @@
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { userId } = await auth()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { id } = await params
-  const supabase = await createSupabaseServerClient()
+  const supabase = await createSupabaseServiceClient()
   const body = await req.json().catch(() => ({}))
 
   const { data: source, error: srcErr } = await supabase
@@ -28,6 +32,7 @@ export async function POST(
       tags: source.tags,
       published: false,
       forked_from: source.id,
+      user_id: userId,
     })
     .select()
     .single()

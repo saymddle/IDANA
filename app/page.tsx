@@ -3,7 +3,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 import NewSessionModal from '@/components/NewSessionModal'
 import { Icon, FoodArt, FoodArtProps } from '@/components/Icons'
 
@@ -11,8 +10,7 @@ const PairingGraph = dynamic(() => import('@/components/PairingGraph'), { ssr: f
 
 interface Pairing { name: string; score: number; emphasis: boolean }
 interface SearchResult { ingredient: string; pairings: Pairing[]; found: boolean }
-interface Session { id: string; name: string; status: string; category: string | null; created_at: string }
-interface Dish { id: string; name: string; category: string | null; created_at: string }
+interface Session { id: string; title: string; published: boolean; created_at: string }
 
 const SUGGESTIONS = ['Chocolate', 'Salmon', 'Miso', 'Lamb', 'Lemon', 'Vanilla', 'Cinnamon', 'Avocado']
 
@@ -43,17 +41,15 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null)
   const [sessionModal, setSessionModal] = useState<{ ingredient: string; pairings: string[] } | null>(null)
   const [recentSessions, setRecentSessions] = useState<Session[]>([])
-  const [recentDishes, setRecentDishes] = useState<Dish[]>([])
   const [loadingRecent, setLoadingRecent] = useState(true)
 
   useEffect(() => {
     async function loadRecent() {
-      const [{ data: sessions }, { data: dishes }] = await Promise.all([
-        supabase.from('sessions').select('*').order('created_at', { ascending: false }).limit(6),
-        supabase.from('dishes').select('*').order('created_at', { ascending: false }).limit(3),
-      ])
-      if (sessions) setRecentSessions(sessions)
-      if (dishes) setRecentDishes(dishes)
+      const res = await fetch('/api/sessions').catch(() => null)
+      if (res?.ok) {
+        const data = await res.json()
+        setRecentSessions((data.sessions ?? []).slice(0, 6))
+      }
       setLoadingRecent(false)
     }
     loadRecent()
@@ -224,12 +220,12 @@ export default function HomePage() {
                         <FoodArt palette={art.palette} glyph={art.glyph} />
                       </div>
                       <div style={{ padding: '10px 12px 12px' }}>
-                        <span className={`badge ${s.status}`}>
+                        <span className={`badge ${s.published ? 'published' : 'draft'}`}>
                           <span className="dot" />
-                          {s.status === 'open' ? 'Open' : 'Closed'}
+                          {s.published ? 'Published' : 'Draft'}
                         </span>
                         <h3 style={{ fontFamily: 'var(--serif)', fontSize: 14, lineHeight: 1.2, color: 'var(--ink)', margin: '6px 0 0', fontWeight: 400 }}>
-                          {s.name}
+                          {s.title}
                         </h3>
                       </div>
                     </button>
@@ -239,41 +235,6 @@ export default function HomePage() {
             )}
           </section>
 
-          {/* Recent Dishes — compact list */}
-          {!loadingRecent && recentDishes.length > 0 && (
-            <section>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 400, fontSize: 22, color: 'var(--ink)', margin: 0 }}>
-                  Recent Dishes
-                </h2>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {recentDishes.map(d => (
-                  <button
-                    key={d.id}
-                    onClick={() => router.push(`/library/${d.id}`)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      textAlign: 'left', padding: '12px 16px',
-                      background: 'var(--card)', border: '1px solid var(--line)',
-                      borderRadius: 14, cursor: 'pointer',
-                      boxShadow: 'var(--shadow-1)', transition: 'transform 0.15s',
-                    }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)' }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = '' }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <h3 style={{ fontFamily: 'var(--serif)', fontSize: 15, fontWeight: 400, color: 'var(--ink)', margin: 0, lineHeight: 1.2 }}>
-                        {d.name}
-                      </h3>
-                      {d.category && <p className="body-sm" style={{ margin: '3px 0 0' }}>{d.category}</p>}
-                    </div>
-                    <Icon.ChevronRight size={16} stroke="var(--muted)" />
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
         </div>
       )}
 

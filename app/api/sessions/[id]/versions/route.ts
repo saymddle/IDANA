@@ -1,12 +1,16 @@
-import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { createSupabaseServiceClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { userId } = await auth()
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { id } = await params
-  const supabase = await createSupabaseServerClient()
+  const supabase = await createSupabaseServiceClient()
 
   const { data, error } = await supabase
     .from('canvas_versions')
