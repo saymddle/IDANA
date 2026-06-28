@@ -63,7 +63,6 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
   const [minimapVisible, setMinimapVisible] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
   const { screenToFlowPosition } = useReactFlow()
-  const nodeIdCounter = useRef(1)
   const spawnPairingRef = useRef<((ingredientName: string, sourceNodeId: string) => void) | null>(null)
 
   const { saveStatus, lastSaved, saveNow, versions, restoreVersion } = useCanvasPersistence({
@@ -76,8 +75,9 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
   useEffect(() => {
     if (!sessionId) return
     fetch(`/api/sessions/${sessionId}/objects`)
-      .then(r => r.json())
-      .then(data => {
+      .then(async r => {
+        if (!r.ok) throw new Error(`Load failed: ${r.status}`)
+        const data = await r.json()
         if (data.objects?.length > 0) {
           setNodes(data.objects.map((obj: {
             id: string; type: string;
@@ -101,9 +101,9 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
             type: e.edge_type ?? 'smoothstep',
           })))
         }
+        setHasLoaded(true)
       })
       .catch(err => console.error('Failed to load canvas:', err))
-      .finally(() => setHasLoaded(true))
   }, [sessionId, setNodes, setEdges])
 
   const handleRestoreVersion = useCallback(async (versionId: string) => {
@@ -135,7 +135,7 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
 
   const spawnNode = useCallback(
     (type: string) => {
-      const id = `node-${nodeIdCounter.current++}`
+      const id = crypto.randomUUID()
       const center = screenToFlowPosition({
         x: window.innerWidth / 2,
         y: window.innerHeight / 2,
@@ -219,7 +219,7 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
 
   const spawnPairingNode = useCallback(
     (ingredientName: string, sourceNodeId: string) => {
-      const id = `node-${nodeIdCounter.current++}`
+      const id = crypto.randomUUID()
       const sourceNode = nodes.find(n => n.id === sourceNodeId)
       const position = {
         x: sourceNode ? sourceNode.position.x + 320 : window.innerWidth / 2 - 210,
@@ -232,7 +232,7 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
         data: { ingredientName, label: `${ingredientName} pairings` },
       }])
       setEdges(eds => [...eds, {
-        id: `edge-${sourceNodeId}-${id}`,
+        id: crypto.randomUUID(),
         source: sourceNodeId,
         target: id,
         type: 'smoothstep',

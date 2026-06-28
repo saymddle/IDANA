@@ -40,7 +40,7 @@ export async function POST(
   ])
 
   if (nodes?.length > 0) {
-    await supabase.from('canvas_objects').insert(
+    const { error: nodesErr } = await supabase.from('canvas_objects').insert(
       nodes.map((n: {
         id: string; type: string;
         position: { x: number; y: number };
@@ -58,10 +58,11 @@ export async function POST(
         collapsed: (n.data as Record<string, unknown>).collapsed ?? false,
       }))
     )
+    if (nodesErr) return NextResponse.json({ error: nodesErr.message }, { status: 500 })
   }
 
   if (edges?.length > 0) {
-    await supabase.from('canvas_edges').insert(
+    const { error: edgesErr } = await supabase.from('canvas_edges').insert(
       edges.map((e: { id: string; source: string; target: string; type?: string }) => ({
         id: e.id,
         session_id: id,
@@ -70,6 +71,7 @@ export async function POST(
         edge_type: e.type ?? 'smoothstep',
       }))
     )
+    if (edgesErr) return NextResponse.json({ error: edgesErr.message }, { status: 500 })
   }
 
   const snapshot = {
