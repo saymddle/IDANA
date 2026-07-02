@@ -121,15 +121,17 @@ const ZOOM_STEP    = 0.12
 // ─── Bubble node ─────────────────────────────────────────────────────────────
 
 function BubbleNode({
-  node, zoom, cx, cy, onTap,
+  node, zoom, cx, cy, pan, onTap, noTransition,
 }: {
   node: RenderedNode
   zoom: number
   cx: number; cy: number
+  pan: { x: number; y: number }
   onTap?: () => void
+  noTransition?: boolean
 }) {
-  const x  = cx + (node.x - cx) * zoom
-  const y  = cy + (node.y - cy) * zoom
+  const x  = cx + (node.x - cx) * zoom + pan.x
+  const y  = cy + (node.y - cy) * zoom + pan.y
   const r  = node.radius * zoom
   const d  = r * 2
   const inside = d >= LABEL_INSIDE_D
@@ -141,7 +143,7 @@ function BubbleNode({
       left: x - r, top: y - r,
       zIndex: node.isSelected ? 3 : 1,
       // Smooth glide when layout recalculates (e.g. new ingredient added)
-      transition: 'left 0.35s cubic-bezier(0.34,1.56,0.64,1), top 0.35s cubic-bezier(0.34,1.56,0.64,1)',
+      transition: noTransition ? 'none' : 'left 0.35s cubic-bezier(0.34,1.56,0.64,1), top 0.35s cubic-bezier(0.34,1.56,0.64,1)',
     }}>
       <div
         onClick={onTap}
@@ -252,6 +254,10 @@ export default function PairingGraph({
   const pinchRef      = useRef<{ dist: number } | null>(null)
   const isGesturing   = useRef(false)
   const [zoom, setZoom] = useState(ZOOM_DEFAULT)
+  const [gestureActive, setGestureActive] = useState(false)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const panRef = useRef({ x: 0, y: 0 })
+  const singleTouchRef = useRef<{ x: number; y: number } | null>(null)
 
   // Selection + hub
   const [selected, setSelected]       = useState<Set<string>>(new Set())
@@ -269,9 +275,10 @@ export default function PairingGraph({
     setFetching(true)
     setFetchedIngredient(null)
     setFetchedPairings([])
-    // Reset selection so the new search ingredient becomes the only selected node
     setSelected(new Set())
     setHubPairings(null)
+    panRef.current = { x: 0, y: 0 }
+    setPan({ x: 0, y: 0 })
     fetch(`/api/ingredient/${encodeURIComponent(ingredientName)}`)
       .then(r => r.json())
       .then(data => {
@@ -327,17 +334,39 @@ export default function PairingGraph({
       return Math.sqrt(dx * dx + dy * dy)
     }
     const onStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) { isGesturing.current = true; pinchRef.current = { dist: getDist(e.touches) } }
+      if (e.touches.length === 2) {
+        isGesturing.current = true
+        setGestureActive(true)
+        pinchRef.current = { dist: getDist(e.touches) }
+        singleTouchRef.current = null
+      } else if (e.touches.length === 1) {
+        singleTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      }
     }
     const onMove = (e: TouchEvent) => {
-      if (e.touches.length !== 2 || !pinchRef.current) return
-      e.preventDefault()
-      const nd = getDist(e.touches)
-      setZoomInstant(zoomRef.current * (nd / pinchRef.current.dist))
-      pinchRef.current.dist = nd
+      if (e.touches.length === 2 && pinchRef.current) {
+        e.preventDefault()
+        const nd = getDist(e.touches)
+        setZoomInstant(zoomRef.current * (nd / pinchRef.current.dist))
+        pinchRef.current.dist = nd
+      } else if (e.touches.length === 1 && singleTouchRef.current) {
+        e.preventDefault()
+        const dx = e.touches[0].clientX - singleTouchRef.current.x
+        const dy = e.touches[0].clientY - singleTouchRef.current.y
+        panRef.current = { x: panRef.current.x + dx, y: panRef.current.y + dy }
+        setPan({ ...panRef.current })
+        singleTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      }
     }
     const onEnd = (e: TouchEvent) => {
-      if (e.touches.length < 2) { pinchRef.current = null; isGesturing.current = false }
+      if (e.touches.length < 2) {
+        pinchRef.current = null
+        isGesturing.current = false
+        setGestureActive(false)
+      }
+      if (e.touches.length === 0) {
+        singleTouchRef.current = null
+      }
     }
     el.addEventListener('touchstart', onStart, { passive: true  })
     el.addEventListener('touchmove',  onMove,  { passive: false })
@@ -542,7 +571,9 @@ export default function PairingGraph({
             zoom={zoom}
             cx={canvasCx}
             cy={canvasCy}
+            pan={pan}
             onTap={node.isSelected ? undefined : () => toggleSelected(node.id)}
+            noTransition={gestureActive}
           />
         ))}
 

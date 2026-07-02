@@ -87,6 +87,7 @@ export default function PairingGraphNode({ data, selected }: NodeProps) {
           ref={innerRef}
           className="pgn-graph-wrap"
           onMouseDown={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}
           onWheel={e => e.stopPropagation()}
         >
@@ -115,7 +116,7 @@ export default function PairingGraphNode({ data, selected }: NodeProps) {
 
       <style>{`
         .pgn-node {
-          width: 420px;
+          width: 100%;
           min-height: 44px;
           background: #1C1A17;
           border: 1.5px solid #3D2B1F;

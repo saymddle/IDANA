@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, Position, type NodeProps, NodeResizer } from '@xyflow/react'
 
 const SENSORY_CATEGORIES = [
   { value: 'general',  label: 'General',  color: '#8B5E3C' },
@@ -52,6 +52,20 @@ export default function ObservationNode({ data, selected }: NodeProps) {
       className={`obs-node ${selected ? 'obs-node--selected' : ''} ${collapsed ? 'obs-node--collapsed' : ''}`}
       onDoubleClick={() => setEditing(true)}
     >
+      {!collapsed && (
+        <NodeResizer
+          minWidth={200}
+          minHeight={140}
+          isVisible={selected}
+          lineStyle={{ border: '1.5px dashed rgba(139, 94, 60, 0.4)' }}
+          handleStyle={{
+            width: 10, height: 10,
+            background: '#F2EBD9',
+            border: '1.5px solid #8B5E3C',
+            borderRadius: 3,
+          }}
+        />
+      )}
       <Handle type="target" position={Position.Left} className="obs-handle" />
       <Handle type="source" position={Position.Right} className="obs-handle" />
 
@@ -90,7 +104,6 @@ export default function ObservationNode({ data, selected }: NodeProps) {
                   nodeData.text = text
                 }}
                 placeholder="Write your observation..."
-                rows={3}
               />
             ) : (
               <p
@@ -155,7 +168,8 @@ export default function ObservationNode({ data, selected }: NodeProps) {
 
       <style>{`
         .obs-node {
-          width: 280px;
+          width: 100%;
+          height: 100%;
           background: #FDFAF4;
           border: 1.5px solid #C4B9A8;
           border-radius: 14px;
@@ -163,6 +177,8 @@ export default function ObservationNode({ data, selected }: NodeProps) {
           cursor: default;
           transition: box-shadow 0.2s, border-color 0.2s;
           overflow: hidden;
+          display: flex;
+          flex-direction: column;
         }
 
         .obs-node--selected {
@@ -225,6 +241,11 @@ export default function ObservationNode({ data, selected }: NodeProps) {
 
         .obs-body {
           padding: 10px 12px 6px;
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
         }
 
         .obs-text {
@@ -244,6 +265,8 @@ export default function ObservationNode({ data, selected }: NodeProps) {
 
         .obs-textarea {
           width: 100%;
+          flex: 1;
+          min-height: 60px;
           font-family: 'Playfair Display', Georgia, serif;
           font-size: 13px;
           line-height: 1.65;
