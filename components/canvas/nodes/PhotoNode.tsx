@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, Position, type NodeProps, NodeResizer } from '@xyflow/react'
+import { createPortal } from 'react-dom'
 
 interface PhotoData {
   label: string
@@ -18,6 +19,7 @@ export default function PhotoNode({ data, selected }: NodeProps) {
   const [editingCaption, setEditingCaption] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadFile = useCallback((file: File) => {
@@ -52,6 +54,20 @@ export default function PhotoNode({ data, selected }: NodeProps) {
     <div
       className={`photo-node ${selected ? 'photo-node--selected' : ''} ${collapsed ? 'photo-node--collapsed' : ''}`}
     >
+      {!collapsed && (
+        <NodeResizer
+          minWidth={200}
+          minHeight={180}
+          isVisible={selected}
+          lineStyle={{ border: '1.5px dashed rgba(90, 122, 74, 0.4)' }}
+          handleStyle={{
+            width: 10, height: 10,
+            background: '#F2EBD9',
+            border: '1.5px solid #5A7A4A',
+            borderRadius: 3,
+          }}
+        />
+      )}
       <Handle type="target" position={Position.Left} className="photo-handle" />
       <Handle type="source" position={Position.Right} className="photo-handle" />
 
@@ -72,7 +88,13 @@ export default function PhotoNode({ data, selected }: NodeProps) {
           {/* Image area */}
           {src ? (
             <div className="photo-img-wrap">
-              <img src={src} alt={caption || 'Photo'} className="photo-img" />
+              <img
+                src={src}
+                alt={caption || 'Photo'}
+                className="photo-img"
+                onClick={() => setLightboxOpen(true)}
+                style={{ cursor: 'zoom-in' }}
+              />
               <button
                 className="photo-replace-btn"
                 onClick={() => fileInputRef.current?.click()}
@@ -141,15 +163,62 @@ export default function PhotoNode({ data, selected }: NodeProps) {
         </div>
       )}
 
+      {lightboxOpen && src && typeof document !== 'undefined' && createPortal(
+        <div
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.85)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'zoom-out',
+          }}
+          onClick={() => setLightboxOpen(false)}
+        >
+          <img
+            src={src}
+            alt={caption || 'Photo'}
+            style={{
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              objectFit: 'contain',
+              borderRadius: 8,
+              boxShadow: '0 8px 48px rgba(0,0,0,0.6)',
+            }}
+            onClick={e => e.stopPropagation()}
+          />
+          {caption && (
+            <p style={{
+              position: 'absolute',
+              bottom: 32,
+              left: 0, right: 0,
+              textAlign: 'center',
+              color: 'rgba(255,255,255,0.8)',
+              fontFamily: 'Playfair Display, Georgia, serif',
+              fontStyle: 'italic',
+              fontSize: 14,
+              margin: 0,
+            }}>
+              {caption}
+            </p>
+          )}
+        </div>,
+        document.body
+      )}
+
       <style>{`
         .photo-node {
-          width: 280px;
+          width: 100%;
+          height: 100%;
           background: #FDFAF4;
           border: 1.5px solid #C4B9A8;
           border-radius: 14px;
           font-family: 'DM Sans', system-ui, sans-serif;
           overflow: hidden;
           transition: box-shadow 0.2s, border-color 0.2s;
+          display: flex;
+          flex-direction: column;
         }
 
         .photo-node--selected {
@@ -206,14 +275,15 @@ export default function PhotoNode({ data, selected }: NodeProps) {
         .photo-img-wrap {
           position: relative;
           width: 100%;
-          max-height: 220px;
+          flex: 1;
+          min-height: 0;
           overflow: hidden;
         }
 
         .photo-img {
           width: 100%;
-          height: 180px;
-          object-fit: cover;
+          height: 100%;
+          object-fit: contain;
           display: block;
         }
 
