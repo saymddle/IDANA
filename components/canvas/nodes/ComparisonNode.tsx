@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, Position, type NodeProps, NodeResizer } from '@xyflow/react'
 
 interface Version {
   id: string
@@ -61,6 +61,15 @@ export default function ComparisonNode({ data, selected }: NodeProps) {
 
   return (
     <div className={`comp-node ${selected ? 'comp-node--selected' : ''}`}>
+      {!collapsed && (
+        <NodeResizer
+          minWidth={220}
+          minHeight={120}
+          isVisible={selected}
+          lineStyle={{ border: '1.5px dashed rgba(192, 57, 75, 0.4)' }}
+          handleStyle={{ width: 10, height: 10, background: '#F2EBD9', border: '1.5px solid #C0394B', borderRadius: 3 }}
+        />
+      )}
       <Handle type="target" position={Position.Left} className="comp-handle" />
       <Handle type="source" position={Position.Right} className="comp-handle" />
 
@@ -149,7 +158,8 @@ export default function ComparisonNode({ data, selected }: NodeProps) {
 
       <style>{`
         .comp-node {
-          width: 320px;
+          width: 100%;
+          height: 100%;
           background: #FDFAF4;
           border: 1.5px solid #C4B9A8;
           border-radius: 14px;

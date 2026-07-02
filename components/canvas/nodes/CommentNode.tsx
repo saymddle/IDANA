@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, Position, type NodeProps, NodeResizer } from '@xyflow/react'
 
 interface Comment {
   id: string
@@ -70,6 +70,15 @@ export default function CommentNode({ data, selected }: NodeProps) {
 
   return (
     <div className={`cm-node ${selected ? 'cm-node--selected' : ''}`}>
+      {!collapsed && (
+        <NodeResizer
+          minWidth={200}
+          minHeight={120}
+          isVisible={selected}
+          lineStyle={{ border: '1.5px dashed rgba(200, 155, 60, 0.4)' }}
+          handleStyle={{ width: 10, height: 10, background: '#F2EBD9', border: '1.5px solid #C89B3C', borderRadius: 3 }}
+        />
+      )}
       <Handle type="target" position={Position.Left} className="cm-handle" />
       <Handle type="source" position={Position.Right} className="cm-handle" />
 
@@ -156,7 +165,10 @@ export default function CommentNode({ data, selected }: NodeProps) {
 
       <style>{`
         .cm-node {
-          width: 260px;
+          width: 100%;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
           background: #FDFAF4;
           border: 1.5px solid #C4B9A8;
           border-radius: 14px;
@@ -199,7 +211,7 @@ export default function CommentNode({ data, selected }: NodeProps) {
         }
 
         .cm-list {
-          max-height: 220px; overflow-y: auto;
+          flex: 1; min-height: 0; overflow-y: auto;
           padding: 8px 12px; display: flex; flex-direction: column; gap: 8px;
         }
         .cm-list::-webkit-scrollbar { width: 3px; }

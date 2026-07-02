@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, Position, type NodeProps, NodeResizer } from '@xyflow/react'
 
 const VARIABLE_TYPES = [
   { value: 'temperature', label: 'Temp',        unit: '°C',  icon: '🌡', color: '#C0394B' },
@@ -42,6 +42,15 @@ export default function VariableNode({ data, selected }: NodeProps) {
       className={`var-node ${selected ? 'var-node--selected' : ''}`}
       style={{ '--var-color': active.color } as React.CSSProperties}
     >
+      {!collapsed && (
+        <NodeResizer
+          minWidth={180}
+          minHeight={100}
+          isVisible={selected}
+          lineStyle={{ border: '1.5px dashed rgba(59, 74, 138, 0.4)' }}
+          handleStyle={{ width: 10, height: 10, background: '#F2EBD9', border: '1.5px solid #3B4A8A', borderRadius: 3 }}
+        />
+      )}
       <Handle type="target" position={Position.Left} className="var-handle" />
       <Handle type="source" position={Position.Right} className="var-handle" />
 
@@ -108,7 +117,8 @@ export default function VariableNode({ data, selected }: NodeProps) {
 
       <style>{`
         .var-node {
-          width: 240px;
+          width: 100%;
+          height: 100%;
           background: #FDFAF4;
           border: 1.5px solid #C4B9A8;
           border-radius: 14px;

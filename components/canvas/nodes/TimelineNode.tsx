@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, Position, type NodeProps, NodeResizer } from '@xyflow/react'
 
 interface TimelineEvent {
   id: string
@@ -43,6 +43,15 @@ export default function TimelineNode({ data, selected }: NodeProps) {
 
   return (
     <div className={`tl-node ${selected ? 'tl-node--selected' : ''}`}>
+      {!collapsed && (
+        <NodeResizer
+          minWidth={200}
+          minHeight={100}
+          isVisible={selected}
+          lineStyle={{ border: '1.5px dashed rgba(59, 74, 138, 0.4)' }}
+          handleStyle={{ width: 10, height: 10, background: '#F2EBD9', border: '1.5px solid #3B4A8A', borderRadius: 3 }}
+        />
+      )}
       <Handle type="target" position={Position.Left} className="tl-handle" />
       <Handle type="source" position={Position.Right} className="tl-handle" />
 
@@ -128,7 +137,8 @@ export default function TimelineNode({ data, selected }: NodeProps) {
 
       <style>{`
         .tl-node {
-          width: 280px;
+          width: 100%;
+          height: 100%;
           background: #FDFAF4;
           border: 1.5px solid #C4B9A8;
           border-radius: 14px;

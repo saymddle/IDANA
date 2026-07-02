@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, Position, type NodeProps, NodeResizer } from '@xyflow/react'
 
 const DEFAULT_SPECTRUMS = [
   { id: '1', left: 'silky',   right: 'grainy',  value: 50 },
@@ -126,6 +126,15 @@ export default function TextureSpectrumNode({ data, selected }: NodeProps) {
 
   return (
     <div className={`tex-node ${selected ? 'tex-node--selected' : ''}`}>
+      {!collapsed && (
+        <NodeResizer
+          minWidth={200}
+          minHeight={100}
+          isVisible={selected}
+          lineStyle={{ border: '1.5px dashed rgba(200, 155, 60, 0.4)' }}
+          handleStyle={{ width: 10, height: 10, background: '#F2EBD9', border: '1.5px solid #C89B3C', borderRadius: 3 }}
+        />
+      )}
       <Handle type="target" position={Position.Left} className="tex-handle" />
       <Handle type="source" position={Position.Right} className="tex-handle" />
 
@@ -210,7 +219,7 @@ export default function TextureSpectrumNode({ data, selected }: NodeProps) {
 
       <style>{`
         .tex-node {
-          width: 280px; background: #FDFAF4;
+          width: 100%; height: 100%; background: #FDFAF4;
           border: 1.5px solid #C4B9A8; border-radius: 14px;
           font-family: 'DM Sans', system-ui, sans-serif;
           overflow: visible;

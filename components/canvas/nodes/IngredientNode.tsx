@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, Position, type NodeProps, NodeResizer } from '@xyflow/react'
 
 const PREP_STATES = ['raw', 'toasted', 'smoked', 'fermented', 'dried', 'pickled', 'ground', 'charred', 'roasted', 'fresh']
 
@@ -34,6 +34,15 @@ export default function IngredientNode({ data, selected, id }: NodeProps) {
 
   return (
     <div className={`ing-node ${selected ? 'ing-node--selected' : ''}`}>
+      {!collapsed && (
+        <NodeResizer
+          minWidth={200}
+          minHeight={100}
+          isVisible={selected}
+          lineStyle={{ border: '1.5px dashed rgba(212, 98, 42, 0.4)' }}
+          handleStyle={{ width: 10, height: 10, background: '#F2EBD9', border: '1.5px solid #D4622A', borderRadius: 3 }}
+        />
+      )}
       <Handle type="target" position={Position.Left} className="ing-handle" />
       <Handle type="source" position={Position.Right} className="ing-handle ing-handle--source" />
 
@@ -138,7 +147,8 @@ export default function IngredientNode({ data, selected, id }: NodeProps) {
 
       <style>{`
         .ing-node {
-          width: 280px;
+          width: 100%;
+          height: 100%;
           background: #FDFAF4;
           border: 1.5px solid #C4B9A8;
           border-radius: 14px;

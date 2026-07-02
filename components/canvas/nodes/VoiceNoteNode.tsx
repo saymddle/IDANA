@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, Position, type NodeProps, NodeResizer } from '@xyflow/react'
 
 function getSupportedMimeType(): string {
   const types = [
@@ -164,6 +164,15 @@ export default function VoiceNoteNode({ data, selected }: NodeProps) {
 
   return (
     <div className={`voice-node ${selected ? 'voice-node--selected' : ''}`}>
+      {!collapsed && (
+        <NodeResizer
+          minWidth={180}
+          minHeight={100}
+          isVisible={selected}
+          lineStyle={{ border: '1.5px dashed rgba(139, 94, 60, 0.4)' }}
+          handleStyle={{ width: 10, height: 10, background: '#F2EBD9', border: '1.5px solid #8B5E3C', borderRadius: 3 }}
+        />
+      )}
       <Handle type="target" position={Position.Left} className="voice-handle" />
       <Handle type="source" position={Position.Right} className="voice-handle" />
 
@@ -236,7 +245,7 @@ export default function VoiceNoteNode({ data, selected }: NodeProps) {
       )}
 
       <style>{`
-        .voice-node{width:240px;background:#FDFAF4;border:1.5px solid #C4B9A8;border-radius:14px;font-family:'DM Sans',system-ui,sans-serif;overflow:hidden;transition:box-shadow 0.2s,border-color 0.2s;}
+        .voice-node{width:100%;height:100%;background:#FDFAF4;border:1.5px solid #C4B9A8;border-radius:14px;font-family:'DM Sans',system-ui,sans-serif;overflow:hidden;transition:box-shadow 0.2s,border-color 0.2s;}
         .voice-node--selected{border-color:#8B5E3C;box-shadow:0 0 0 3px rgba(139,94,60,0.15);}
         .voice-handle{width:8px !important;height:8px !important;background:#8B5E3C !important;border:2px solid #F2EBD9 !important;opacity:0;transition:opacity 0.2s;}
         .voice-node:hover .voice-handle,.voice-node--selected .voice-handle{opacity:1;}
