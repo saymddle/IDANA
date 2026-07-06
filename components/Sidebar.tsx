@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import { useTheme } from '@/context/ThemeContext'
 import { Icon, IDANAGlyph } from '@/components/Icons'
@@ -14,24 +14,122 @@ const NAV = [
   { href: '/profile',  label: 'Profile',  iconKey: 'Profile'  as const },
 ]
 
+const RAIL_W = 76
+const NOTCH_H = 52
+const COLLAPSE_KEY = 'idana-sidebar-collapsed'
+const NOTCH_Y_KEY  = 'idana-sidebar-notch-y'
+
 export default function Sidebar() {
   const pathname = usePathname()
   const { theme, toggleTheme } = useTheme()
   const [showModal, setShowModal] = useState(false)
 
+  // ── Collapsible-notch state ──
+  const [collapsed, setCollapsed] = useState(false)
+  const [notchY, setNotchY] = useState(140)
+  const [mounted, setMounted] = useState(false)
+  const drag = useRef({ active: false, startY: 0, startTop: 0, moved: false })
+
+  // Hydrate persisted state after mount (avoids SSR mismatch)
+  useEffect(() => {
+    setMounted(true)
+    try {
+      const c = localStorage.getItem(COLLAPSE_KEY)
+      if (c != null) setCollapsed(c === '1')
+      const y = localStorage.getItem(NOTCH_Y_KEY)
+      if (y != null) {
+        const parsed = parseInt(y, 10)
+        if (!Number.isNaN(parsed)) {
+          setNotchY(Math.max(8, Math.min(window.innerHeight - NOTCH_H - 8, parsed)))
+        }
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  // Expose the current rail width to the layout so page content reflows
+  useEffect(() => {
+    if (!mounted) return
+    document.documentElement.style.setProperty('--sidebar-w', collapsed ? '0px' : `${RAIL_W}px`)
+    try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0') } catch { /* ignore */ }
+  }, [collapsed, mounted])
+
+  useEffect(() => {
+    if (!mounted) return
+    try { localStorage.setItem(NOTCH_Y_KEY, String(Math.round(notchY))) } catch { /* ignore */ }
+  }, [notchY, mounted])
+
   function isActive(href: string) {
     return pathname === href || (href !== '/' && pathname.startsWith(href))
   }
 
+  // ── Notch drag (vertical reposition along the left edge) ──
+  const onNotchDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    drag.current = { active: true, startY: e.clientY, startTop: notchY, moved: false }
+  }, [notchY])
+
+  const onNotchMove = useCallback((e: React.PointerEvent) => {
+    const d = drag.current
+    if (!d.active) return
+    const dy = e.clientY - d.startY
+    if (Math.abs(dy) > 4) d.moved = true
+    const next = Math.max(8, Math.min(window.innerHeight - NOTCH_H - 8, d.startTop + dy))
+    setNotchY(next)
+  }, [])
+
+  const onNotchUp = useCallback((e: React.PointerEvent) => {
+    const d = drag.current
+    ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+    const wasDrag = d.moved
+    d.active = false
+    if (!wasDrag) setCollapsed(c => !c)   // tap toggles open/closed
+  }, [])
+
   return (
     <>
-      {/* ── Desktop sidebar ── */}
+      {/* ── Notch handle: the collapsed sidebar; drag vertically to reposition ── */}
+      <button
+        className="hidden md:flex"
+        onPointerDown={onNotchDown}
+        onPointerMove={onNotchMove}
+        onPointerUp={onNotchUp}
+        onPointerCancel={onNotchUp}
+        title={collapsed ? 'Open menu (drag to move)' : 'Hide menu (drag to move)'}
+        style={{
+          position: 'fixed',
+          top: notchY,
+          left: collapsed ? 0 : RAIL_W,
+          zIndex: 51,
+          width: 22, height: NOTCH_H,
+          padding: 0,
+          alignItems: 'center', justifyContent: 'center',
+          background: 'var(--green)', color: '#FBF8F2',
+          border: 'none',
+          borderRadius: collapsed ? '0 14px 14px 0' : '0 12px 12px 0',
+          boxShadow: '0 4px 14px rgba(59,83,35,0.28)',
+          cursor: 'grab',
+          touchAction: 'none',
+          transition: 'left 0.22s ease, border-radius 0.22s ease',
+        }}
+      >
+        <span style={{
+          display: 'inline-flex',
+          transform: collapsed ? 'none' : 'rotate(180deg)',
+          transition: 'transform 0.22s ease',
+        }}>
+          <Icon.ChevronRight size={15} stroke="#FBF8F2" />
+        </span>
+      </button>
+
+      {/* ── Desktop sidebar (expanded rail) ── */}
       <aside className="hidden md:flex" style={{
-        width: 76, minHeight: '100vh',
+        width: RAIL_W, minHeight: '100vh',
         background: 'var(--bg)', borderRight: '1px solid var(--line)',
         flexDirection: 'column', alignItems: 'center',
         padding: '22px 0 18px', gap: 6,
-        position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 50,
+        position: 'fixed', left: collapsed ? -RAIL_W - 1 : 0, top: 0, bottom: 0, zIndex: 50,
+        transition: 'left 0.22s ease',
       }}>
         <div style={{ marginBottom: 14, cursor: 'pointer' }}>
           <IDANAGlyph size={32} color="var(--green)" />

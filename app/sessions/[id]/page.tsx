@@ -33,7 +33,7 @@ export default function SessionPage() {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column' }}>
+    <div className="canvas-layout">
       {forkedFrom && (
         <div className="sfb-banner">
           <span>⎇</span>

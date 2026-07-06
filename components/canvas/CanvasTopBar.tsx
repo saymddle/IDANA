@@ -16,7 +16,6 @@ interface CanvasTopBarProps {
 export default function CanvasTopBar({
   title,
   onTitleChange,
-  onBack,
   onToggleMinimap,
   minimapVisible,
   nodeCount = 0,
@@ -47,14 +46,6 @@ export default function CanvasTopBar({
   return (
     <div className="idana-topbar">
       <div className="idana-topbar-left">
-        <button className="idana-topbar-back" onClick={onBack} title="Back to sessions">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
-
-        <span className="idana-topbar-divider" />
-
         {editing ? (
           <input
             ref={inputRef}
@@ -140,32 +131,6 @@ export default function CanvasTopBar({
           display: flex;
           align-items: center;
           gap: 4px;
-          flex-shrink: 0;
-        }
-
-        .idana-topbar-back {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 32px;
-          height: 32px;
-          border: none;
-          background: transparent;
-          border-radius: 8px;
-          cursor: pointer;
-          color: var(--idana-charcoal, #1C1A17);
-          transition: background 0.15s;
-          flex-shrink: 0;
-        }
-
-        .idana-topbar-back:hover {
-          background: rgba(28, 26, 23, 0.06);
-        }
-
-        .idana-topbar-divider {
-          width: 1px;
-          height: 20px;
-          background: var(--idana-ash, #C4B9A8);
           flex-shrink: 0;
         }
 
