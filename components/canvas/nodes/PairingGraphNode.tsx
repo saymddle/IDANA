@@ -40,7 +40,6 @@ export default function PairingGraphNode({ data, selected }: NodeProps) {
           minWidth={320}
           minHeight={360}
           isVisible={selected}
-          lineStyle={{ border: '1.5px dashed rgba(192, 57, 75, 0.4)' }}
           handleStyle={{
             width: 10, height: 10,
             background: '#F2EBD9',
@@ -117,6 +116,7 @@ export default function PairingGraphNode({ data, selected }: NodeProps) {
       <style>{`
         .pgn-node {
           width: 100%;
+          height: 100%;
           min-height: 44px;
           background: #1C1A17;
           border: 1.5px solid #3D2B1F;

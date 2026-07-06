@@ -66,7 +66,6 @@ export default function ComparisonNode({ data, selected }: NodeProps) {
           minWidth={220}
           minHeight={120}
           isVisible={selected}
-          lineStyle={{ border: '1.5px dashed rgba(192, 57, 75, 0.4)' }}
           handleStyle={{ width: 10, height: 10, background: '#F2EBD9', border: '1.5px solid #C0394B', borderRadius: 3 }}
         />
       )}

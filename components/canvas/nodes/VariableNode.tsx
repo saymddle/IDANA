@@ -47,7 +47,6 @@ export default function VariableNode({ data, selected }: NodeProps) {
           minWidth={180}
           minHeight={100}
           isVisible={selected}
-          lineStyle={{ border: '1.5px dashed rgba(59, 74, 138, 0.4)' }}
           handleStyle={{ width: 10, height: 10, background: '#F2EBD9', border: '1.5px solid #3B4A8A', borderRadius: 3 }}
         />
       )}

@@ -59,7 +59,6 @@ export default function PhotoNode({ data, selected }: NodeProps) {
           minWidth={200}
           minHeight={180}
           isVisible={selected}
-          lineStyle={{ border: '1.5px dashed rgba(90, 122, 74, 0.4)' }}
           handleStyle={{
             width: 10, height: 10,
             background: '#F2EBD9',

@@ -75,7 +75,6 @@ export default function CommentNode({ data, selected }: NodeProps) {
           minWidth={200}
           minHeight={120}
           isVisible={selected}
-          lineStyle={{ border: '1.5px dashed rgba(200, 155, 60, 0.4)' }}
           handleStyle={{ width: 10, height: 10, background: '#F2EBD9', border: '1.5px solid #C89B3C', borderRadius: 3 }}
         />
       )}

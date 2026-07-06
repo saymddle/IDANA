@@ -169,7 +169,6 @@ export default function VoiceNoteNode({ data, selected }: NodeProps) {
           minWidth={180}
           minHeight={100}
           isVisible={selected}
-          lineStyle={{ border: '1.5px dashed rgba(139, 94, 60, 0.4)' }}
           handleStyle={{ width: 10, height: 10, background: '#F2EBD9', border: '1.5px solid #8B5E3C', borderRadius: 3 }}
         />
       )}

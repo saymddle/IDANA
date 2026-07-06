@@ -57,7 +57,6 @@ export default function ObservationNode({ data, selected }: NodeProps) {
           minWidth={200}
           minHeight={140}
           isVisible={selected}
-          lineStyle={{ border: '1.5px dashed rgba(139, 94, 60, 0.4)' }}
           handleStyle={{
             width: 10, height: 10,
             background: '#F2EBD9',
