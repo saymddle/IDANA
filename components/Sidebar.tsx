@@ -16,26 +16,26 @@ const NAV = [
 
 const RAIL_W = 76
 const NOTCH_H = 52
-const COLLAPSE_KEY = 'idana-sidebar-collapsed'
-const NOTCH_Y_KEY  = 'idana-sidebar-notch-y'
+const NOTCH_Y_KEY = 'idana-sidebar-notch-y'
 
 export default function Sidebar() {
   const pathname = usePathname()
   const { theme, toggleTheme } = useTheme()
   const [showModal, setShowModal] = useState(false)
 
-  // ── Collapsible-notch state ──
-  const [collapsed, setCollapsed] = useState(false)
+  // ── Notch state ──
+  // The notch is the default and only resting form of the sidebar. Content
+  // always lays out full-width; tapping the notch is a transient peek that
+  // overlays the nav rail and collapses back to the notch.
+  const [collapsed, setCollapsed] = useState(true)
   const [notchY, setNotchY] = useState(140)
   const [mounted, setMounted] = useState(false)
   const drag = useRef({ active: false, startY: 0, startTop: 0, moved: false })
 
-  // Hydrate persisted state after mount (avoids SSR mismatch)
+  // Restore the notch's saved vertical position after mount
   useEffect(() => {
     setMounted(true)
     try {
-      const c = localStorage.getItem(COLLAPSE_KEY)
-      if (c != null) setCollapsed(c === '1')
       const y = localStorage.getItem(NOTCH_Y_KEY)
       if (y != null) {
         const parsed = parseInt(y, 10)
@@ -45,13 +45,6 @@ export default function Sidebar() {
       }
     } catch { /* ignore */ }
   }, [])
-
-  // Expose the current rail width to the layout so page content reflows
-  useEffect(() => {
-    if (!mounted) return
-    document.documentElement.style.setProperty('--sidebar-w', collapsed ? '0px' : `${RAIL_W}px`)
-    try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0') } catch { /* ignore */ }
-  }, [collapsed, mounted])
 
   useEffect(() => {
     if (!mounted) return
