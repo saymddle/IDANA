@@ -4,33 +4,37 @@ import { useState, useCallback, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import NewSessionModal from '@/components/NewSessionModal'
-import { Icon, FoodArt, FoodArtProps } from '@/components/Icons'
+import { sessionCategory, categoryColor } from '@/lib/categories'
 
 const PairingGraph = dynamic(() => import('@/components/PairingGraph'), { ssr: false })
 
 interface Pairing { name: string; score: number; emphasis: boolean }
 interface SearchResult { ingredient: string; pairings: Pairing[]; found: boolean }
-interface Session { id: string; title: string; published: boolean; created_at: string }
+interface Session {
+  id: string
+  title: string
+  goal?: string
+  tags?: string[]
+  category?: string | null
+  published: boolean
+  node_count?: number
+  created_at: string
+  updated_at?: string
+}
 
 const SUGGESTIONS = ['Chocolate', 'Salmon', 'Miso', 'Lamb', 'Lemon', 'Vanilla', 'Cinnamon', 'Avocado']
 
-const PALETTES: FoodArtProps['palette'][] = [
-  ['#3D2C1F', '#6B4A2B', '#A77B4E', '#1C1C1A'],
-  ['#E8E1C9', '#C5D4A4', '#FAF7EE', '#7C8C5B'],
-  ['#8B3A1F', '#D4A24C', '#C16E2D', '#3A1F12'],
-  ['#F2DC8E', '#E8B746', '#FBF5DA', '#A07924'],
-  ['#2A2326', '#5C4A56', '#D4C5C2', '#1A1518'],
-]
-const GLYPHS = ['octopus', 'leaf', 'circle', 'grain', 'dot'] as const
-
-function hashStr(s: string): number {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0
-  return Math.abs(h)
-}
-function artFor(id: string) {
-  const h = hashStr(id)
-  return { palette: PALETTES[h % PALETTES.length], glyph: GLYPHS[h % GLYPHS.length] }
+function relativeTime(iso?: string) {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days < 7) return `${days}d ago`
+  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
 export default function HomePage() {
@@ -44,15 +48,11 @@ export default function HomePage() {
   const [loadingRecent, setLoadingRecent] = useState(true)
 
   useEffect(() => {
-    async function loadRecent() {
-      const res = await fetch('/api/sessions').catch(() => null)
-      if (res?.ok) {
-        const data = await res.json()
-        setRecentSessions((data.sessions ?? []).slice(0, 6))
-      }
-      setLoadingRecent(false)
-    }
-    loadRecent()
+    fetch('/api/sessions')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.sessions) setRecentSessions(d.sessions.slice(0, 6)) })
+      .catch(() => {})
+      .finally(() => setLoadingRecent(false))
   }, [])
 
   const search = useCallback(async (name: string) => {
@@ -67,178 +67,100 @@ export default function HomePage() {
     finally { setLoading(false) }
   }, [])
 
-  const handleStartSession = (ingredient: string, pairings: string[]) => {
+  const handleStartSession = (ingredient: string, pairings: string[]) =>
     setSessionModal({ ingredient, pairings })
-  }
 
   const showGraph = result && !loading
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
-
-      {/* ── Top section ── */}
-      <div style={{
-        padding: showGraph ? '20px 32px 0' : '0 32px',
-        flexShrink: 0, transition: 'padding 0.3s ease',
-      }}>
-        {/* Empty-state hero */}
-        {!showGraph && (
-          <div style={{ textAlign: 'center', paddingTop: 48, paddingBottom: 20 }}>
-            <p className="eyebrow" style={{ marginBottom: 10 }}>Flavor Intelligence</p>
-            <h1 className="h-display" style={{ margin: '0 0 14px' }}>
-              What are you<br />
-              cooking <span className="accent">today?</span>
-            </h1>
-            <p className="body-md" style={{ maxWidth: 380, margin: '0 auto 24px' }}>
-              Search any ingredient to explore its flavor universe.
-            </p>
-          </div>
-        )}
-
-        {/* Graph-state header */}
-        {showGraph && (
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
-            <p className="eyebrow">Pairing Explorer</p>
-            <button
-              onClick={() => { setResult(null); setError(null); setQuery('') }}
-              style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              ← back
-            </button>
-          </div>
-        )}
-        {showGraph && (
-          <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 400, fontSize: 36, letterSpacing: '-0.01em', color: 'var(--ink)', margin: '0 0 12px', lineHeight: 1 }}>
-            {result.ingredient}
-          </h2>
-        )}
-
-        {/* Search bar */}
-        <div style={{ maxWidth: showGraph ? 520 : 600, margin: showGraph ? '0' : '0 auto', paddingBottom: 14 }}>
-          <div className="search">
-            <Icon.Search size={18} stroke="var(--muted)" />
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && search(query)}
-              placeholder="Search any ingredient — miso, lemon, cinnamon..."
-            />
-            <button
-              className="cta"
-              onClick={() => search(query)}
-              disabled={loading}
-              style={{ height: 36, padding: '0 16px', fontSize: 13, opacity: loading ? 0.7 : 1 }}
-            >
-              {loading ? '...' : 'Explore'}
-            </button>
-          </div>
+    <div className="hm-root">
+      <div className="hm-inner">
+        <div className="hm-brand">
+          <span className="hm-brand-name">IDANA</span>
+          <span className="hm-brand-sub">Culinary R&amp;D notebook</span>
         </div>
 
-        {/* Quick picks */}
-        {!showGraph && !loading && (
-          <div className="scroll-hide" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 20, paddingLeft: 4, paddingRight: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
-            {SUGGESTIONS.map(s => (
-              <button key={s} className="chip is-soft" onClick={() => { setQuery(s); search(s) }} style={{ flexShrink: 0, cursor: 'pointer' }}>
-                {s}
+        {!showGraph ? (
+          <>
+            <h1 className="hm-h1">What are you working with?</h1>
+            <p className="hm-lede">
+              Search an ingredient to surface its strongest flavor pairings — then spin up a session on the canvas.
+            </p>
+            <form
+              className="hm-form"
+              onSubmit={e => { e.preventDefault(); search(query) }}
+            >
+              <input
+                className="hm-search"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Try miso, chocolate, black garlic…"
+              />
+              <button type="submit" className="hm-explore" disabled={loading}>
+                {loading ? '…' : 'Explore'}
               </button>
-            ))}
+            </form>
+            <div className="hm-chips">
+              <span className="hm-chips-label">Try</span>
+              {SUGGESTIONS.map(s => (
+                <button key={s} className="hm-chip" onClick={() => { setQuery(s); search(s) }}>{s}</button>
+              ))}
+            </div>
+            {error && <p className="hm-error">{error}</p>}
+          </>
+        ) : (
+          <>
+            <button className="hm-back" onClick={() => { setResult(null); setError(null); setQuery('') }}>← back</button>
+            <div className="hm-result-head">
+              <h1 className="hm-result-name">{result!.ingredient}</h1>
+              <span className="hm-pair-count">{result!.pairings.length} pairings</span>
+            </div>
+            <p className="hm-result-sub">Click a pairing to start a session.</p>
+            <div className="hm-graph-card">
+              <PairingGraph
+                ingredient={result!.ingredient}
+                pairings={result!.pairings}
+                sessionId={null}
+                onStartSession={handleStartSession}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Recent sessions */}
+        <div className="hm-recent-head">
+          <h2 className="hm-recent-title">Recent sessions</h2>
+          <button className="hm-viewall" onClick={() => router.push('/sessions')}>View all →</button>
+        </div>
+        {loadingRecent ? (
+          <div className="hm-recent-empty">Loading…</div>
+        ) : recentSessions.length === 0 ? (
+          <div className="hm-recent-empty">No sessions yet — search an ingredient and start one.</div>
+        ) : (
+          <div className="hm-grid">
+            {recentSessions.map(s => {
+              const cat = sessionCategory(s)
+              return (
+                <button key={s.id} className="hm-card" onClick={() => router.push(`/sessions/${s.id}`)}>
+                  <div className="hm-card-top">
+                    <span className="hm-card-cat" style={{ color: categoryColor(cat) }}>{cat || 'Session'}</span>
+                    <span className="hm-card-nodes">{s.node_count ?? 0} nodes</span>
+                  </div>
+                  <div className="hm-card-title">{s.title}</div>
+                  {s.goal && <div className="hm-card-goal">{s.goal}</div>}
+                  {(s.tags ?? []).length > 0 && (
+                    <div className="hm-card-tags">
+                      {(s.tags ?? []).slice(0, 2).map(t => <span key={t} className="hm-card-tag">{t}</span>)}
+                    </div>
+                  )}
+                  <div className="hm-card-updated">Updated {relativeTime(s.updated_at || s.created_at)}</div>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
 
-      {/* ── Graph view ── */}
-      {showGraph && (
-        <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-          <PairingGraph
-            ingredient={result.ingredient}
-            pairings={result.pairings}
-            sessionId={null}
-            onStartSession={handleStartSession}
-          />
-        </div>
-      )}
-
-      {/* ── Loading ── */}
-      {loading && (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--muted)' }}>
-          <div style={{ width: 18, height: 18, border: '2px solid var(--line)', borderTopColor: 'var(--green)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-          Searching flavor graph...
-        </div>
-      )}
-
-      {/* ── Error ── */}
-      {error && !loading && (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
-          <p className="body-md">{error}</p>
-          <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', color: 'var(--green)', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>Try another</button>
-        </div>
-      )}
-
-      {/* ── Empty state: recent sessions ── */}
-      {!showGraph && !loading && !error && (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 32px 48px' }}>
-
-          <section style={{ marginBottom: 36 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 400, fontSize: 22, color: 'var(--ink)', margin: 0 }}>
-                Recent Sessions
-              </h2>
-              <button
-                onClick={() => router.push('/sessions')}
-                style={{ background: 'none', border: 'none', color: 'var(--green)', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}
-              >
-                View all <Icon.ChevronRight size={14} stroke="var(--green)" />
-              </button>
-            </div>
-
-            {loadingRecent ? (
-              <p className="body-sm">Loading...</p>
-            ) : recentSessions.length === 0 ? (
-              <div style={{ padding: '28px 24px', background: 'var(--card-soft)', border: '1px dashed var(--line-strong)', borderRadius: 16, textAlign: 'center' }}>
-                <p className="body-sm">No sessions yet — search an ingredient and start one.</p>
-              </div>
-            ) : (
-              <div className="scroll-hide" style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 8 }}>
-                {recentSessions.map(s => {
-                  const art = artFor(s.id)
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => router.push(`/sessions/${s.id}`)}
-                      style={{
-                        flexShrink: 0, width: 156, textAlign: 'left',
-                        background: 'var(--card)', border: '1px solid var(--line)',
-                        borderRadius: 16, overflow: 'hidden',
-                        boxShadow: 'var(--shadow-1)', cursor: 'pointer',
-                        transition: 'transform 0.15s, box-shadow 0.15s',
-                      }}
-                      onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = 'var(--shadow-2)' }}
-                      onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = ''; el.style.boxShadow = 'var(--shadow-1)' }}
-                    >
-                      <div style={{ height: 100, overflow: 'hidden' }}>
-                        <FoodArt palette={art.palette} glyph={art.glyph} />
-                      </div>
-                      <div style={{ padding: '10px 12px 12px' }}>
-                        <span className={`badge ${s.published ? 'published' : 'draft'}`}>
-                          <span className="dot" />
-                          {s.published ? 'Published' : 'Draft'}
-                        </span>
-                        <h3 style={{ fontFamily: 'var(--serif)', fontSize: 14, lineHeight: 1.2, color: 'var(--ink)', margin: '6px 0 0', fontWeight: 400 }}>
-                          {s.title}
-                        </h3>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </section>
-
-        </div>
-      )}
-
-      {/* Session modal */}
       {sessionModal && (
         <NewSessionModalMulti
           ingredient={sessionModal.ingredient}
@@ -246,6 +168,61 @@ export default function HomePage() {
           onClose={() => setSessionModal(null)}
         />
       )}
+
+      <style>{`
+        .hm-root { min-height: 100vh; background: #F5EFE3; font-family: 'DM Sans', system-ui, sans-serif; overflow-y: auto; }
+        .hm-inner { max-width: 900px; margin: 0 auto; padding: 46px 40px 72px; }
+
+        .hm-brand { display: flex; align-items: baseline; gap: 11px; margin-bottom: 36px; }
+        .hm-brand-name { font-family: 'Playfair Display', Georgia, serif; font-size: 22px; font-weight: 600; letter-spacing: 0.03em; color: #1C1A17; }
+        .hm-brand-sub { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: #9A8F80; }
+
+        .hm-h1 { font-family: 'Playfair Display', Georgia, serif; font-weight: 500; font-size: 30px; line-height: 1.2; color: #1C1A17; margin: 0 0 8px; }
+        .hm-lede { font-size: 14px; color: #6B5D50; margin: 0 0 22px; max-width: 520px; }
+        .hm-form { display: flex; gap: 10px; max-width: 560px; margin-bottom: 16px; }
+        .hm-search { flex: 1; font-size: 15px; color: #1C1A17; background: #FDFAF4; border: 1px solid #C4B9A8; border-radius: 24px; padding: 12px 18px; outline: none; font-family: inherit; transition: border-color 0.15s; }
+        .hm-search:focus { border-color: #2F5D3A; }
+        .hm-search::placeholder { color: #B0A090; }
+        .hm-explore { font-size: 14px; font-weight: 600; color: #F5EFE3; background: #2F5D3A; border: none; border-radius: 24px; padding: 12px 24px; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+        .hm-explore:hover { background: #264c30; }
+        .hm-explore:disabled { opacity: 0.7; cursor: default; }
+        .hm-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 52px; }
+        .hm-chips-label { font-size: 12px; color: #9A8F80; margin-right: 2px; }
+        .hm-chip { font-size: 12.5px; color: #4A3D30; background: #FDFAF4; border: 1px solid #C4B9A8; border-radius: 20px; padding: 6px 14px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+        .hm-chip:hover { border-color: #8B5E3C; color: #8B5E3C; }
+        .hm-error { font-size: 13px; color: #C0394B; margin: 0 0 40px; }
+
+        .hm-back { font-size: 13px; color: #6B5D50; background: none; border: none; cursor: pointer; padding: 0; margin-bottom: 14px; font-family: inherit; }
+        .hm-back:hover { color: #1C1A17; }
+        .hm-result-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 2px; }
+        .hm-result-name { font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-weight: 500; font-size: 36px; color: #1C1A17; margin: 0; }
+        .hm-pair-count { font-size: 13px; color: #9A8F80; }
+        .hm-result-sub { font-size: 13px; color: #6B5D50; margin: 0 0 18px; }
+        .hm-graph-card { height: 380px; background: #1C1A17; border: 1px solid #3D2B1F; border-radius: 16px; padding: 10px; margin-bottom: 46px; }
+
+        .hm-recent-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; border-top: 1px solid #E4DAC6; padding-top: 26px; }
+        .hm-recent-title { font-family: 'Playfair Display', Georgia, serif; font-weight: 500; font-size: 19px; color: #1C1A17; margin: 0; }
+        .hm-viewall { font-size: 12.5px; color: #8B5E3C; background: none; border: none; cursor: pointer; font-family: inherit; }
+        .hm-viewall:hover { color: #5a3d27; }
+        .hm-recent-empty { font-size: 13px; color: #9A8F80; font-style: italic; padding: 24px 0; }
+
+        .hm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+        .hm-card { text-align: left; display: flex; flex-direction: column; gap: 9px; background: #FDFAF4; border: 1px solid #C4B9A8; border-radius: 14px; padding: 16px; cursor: pointer; box-shadow: 0 1px 3px rgba(28,26,23,0.05); font-family: inherit; transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
+        .hm-card:hover { border-color: #8B5E3C; box-shadow: 0 6px 18px rgba(28,26,23,0.10); transform: translateY(-2px); }
+        .hm-card-top { display: flex; align-items: center; justify-content: space-between; }
+        .hm-card-cat { font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase; font-weight: 600; }
+        .hm-card-nodes { font-size: 10.5px; color: #9A8F80; }
+        .hm-card-title { font-family: 'Playfair Display', Georgia, serif; font-size: 16px; line-height: 1.25; color: #1C1A17; }
+        .hm-card-goal { font-size: 12px; color: #6B5D50; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .hm-card-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+        .hm-card-tag { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: #6B5D50; background: #EDE6D6; padding: 2px 7px; border-radius: 5px; }
+        .hm-card-updated { font-size: 10.5px; color: #9A8F80; margin-top: 2px; }
+
+        @media (max-width: 640px) {
+          .hm-inner { padding: 30px 18px 72px; }
+          .hm-form { flex-direction: column; }
+        }
+      `}</style>
     </div>
   )
 }
@@ -258,8 +235,9 @@ function NewSessionModalMulti({
   pairingNames: string[]
   onClose: () => void
 }) {
-  const router = useRouter()
-
+  // Single pairing reuses the two-ingredient modal; multiple falls through to
+  // the dedicated form below. Split into a sub-component so hooks are never
+  // called conditionally.
   if (pairingNames.length === 1) {
     return (
       <NewSessionModal
@@ -269,7 +247,17 @@ function NewSessionModalMulti({
       />
     )
   }
+  return <MultiSessionForm ingredient={ingredient} pairingNames={pairingNames} onClose={onClose} />
+}
 
+function MultiSessionForm({
+  ingredient, pairingNames, onClose,
+}: {
+  ingredient: string
+  pairingNames: string[]
+  onClose: () => void
+}) {
+  const router = useRouter()
   const [name, setName] = useState(`${ingredient} + ${pairingNames.length} pairings`)
   const [category, setCategory] = useState('')
   const [loading, setLoading] = useState(false)
@@ -286,6 +274,7 @@ function NewSessionModalMulti({
         body: JSON.stringify({
           title: name.trim(),
           tags: category ? [category] : [],
+          category: category || null,
           goal: allIngredients.join(', '),
         }),
       })

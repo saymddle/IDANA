@@ -10,7 +10,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from('sessions')
-    .select('id, title, goal, tags, cover_photo, published, created_at, updated_at')
+    .select('id, title, goal, tags, category, brief, hypothesis, method, cover_photo, published, created_at, updated_at')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false })
 
@@ -33,6 +33,8 @@ export async function GET() {
 
   const sessions = (data ?? []).map((s: {
     id: string; title: string; goal?: string; tags?: string[];
+    category?: string | null; brief?: string | null;
+    hypothesis?: string | null; method?: string | null;
     cover_photo?: string | null; published: boolean;
     created_at: string; updated_at: string;
   }) => ({ ...s, node_count: counts[s.id] ?? 0 }))
@@ -46,11 +48,21 @@ export async function POST(req: Request) {
 
   const supabase = await createSupabaseServiceClient()
   const body = await req.json()
-  const { title, goal, tags } = body
+  const { title, goal, tags, category, brief, hypothesis, method } = body
 
   const { data, error } = await supabase
     .from('sessions')
-    .insert({ title: title || 'Untitled Session', goal, tags: tags ?? [], published: false, user_id: userId })
+    .insert({
+      title: title || 'Untitled Session',
+      goal,
+      tags: tags ?? [],
+      category: category ?? tags?.[0] ?? null,
+      brief: brief ?? null,
+      hypothesis: hypothesis ?? null,
+      method: method ?? null,
+      published: false,
+      user_id: userId,
+    })
     .select()
     .single()
 
