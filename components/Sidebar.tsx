@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useTheme } from '@/context/ThemeContext'
 import { Icon, IDANAGlyph } from '@/components/Icons'
@@ -14,161 +14,53 @@ const NAV = [
   { href: '/profile',  label: 'Profile',  iconKey: 'Profile'  as const },
 ]
 
-const RAIL_W = 76
-const NOTCH_H = 52
-const NOTCH_Y_KEY = 'idana-sidebar-notch-y'
-
 export default function Sidebar() {
   const pathname = usePathname()
   const { theme, toggleTheme } = useTheme()
   const [showModal, setShowModal] = useState(false)
 
-  // ── Notch state ──
-  // The notch is the default and only resting form of the sidebar. Content
-  // always lays out full-width; tapping the notch is a transient peek that
-  // overlays the nav rail and collapses back to the notch.
-  const [collapsed, setCollapsed] = useState(true)
-  const [notchY, setNotchY] = useState(140)
-  const [mounted, setMounted] = useState(false)
-  const drag = useRef({ active: false, startY: 0, startTop: 0, moved: false })
-
-  // Restore the notch's saved vertical position after mount
-  useEffect(() => {
-    setMounted(true)
-    try {
-      const y = localStorage.getItem(NOTCH_Y_KEY)
-      if (y != null) {
-        const parsed = parseInt(y, 10)
-        if (!Number.isNaN(parsed)) {
-          setNotchY(Math.max(8, Math.min(window.innerHeight - NOTCH_H - 8, parsed)))
-        }
-      }
-    } catch { /* ignore */ }
-  }, [])
-
-  useEffect(() => {
-    if (!mounted) return
-    try { localStorage.setItem(NOTCH_Y_KEY, String(Math.round(notchY))) } catch { /* ignore */ }
-  }, [notchY, mounted])
-
   function isActive(href: string) {
     return pathname === href || (href !== '/' && pathname.startsWith(href))
   }
 
-  // ── Notch drag (vertical reposition along the left edge) ──
-  const onNotchDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault()
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    drag.current = { active: true, startY: e.clientY, startTop: notchY, moved: false }
-  }, [notchY])
-
-  const onNotchMove = useCallback((e: React.PointerEvent) => {
-    const d = drag.current
-    if (!d.active) return
-    const dy = e.clientY - d.startY
-    if (Math.abs(dy) > 4) d.moved = true
-    const next = Math.max(8, Math.min(window.innerHeight - NOTCH_H - 8, d.startTop + dy))
-    setNotchY(next)
-  }, [])
-
-  const onNotchUp = useCallback((e: React.PointerEvent) => {
-    const d = drag.current
-    ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
-    const wasDrag = d.moved
-    d.active = false
-    if (!wasDrag) setCollapsed(c => !c)   // tap toggles open/closed
-  }, [])
-
   return (
     <>
-      {/* ── Notch handle: the collapsed sidebar; drag vertically to reposition ── */}
-      <button
-        className="hidden md:flex"
-        onPointerDown={onNotchDown}
-        onPointerMove={onNotchMove}
-        onPointerUp={onNotchUp}
-        onPointerCancel={onNotchUp}
-        title={collapsed ? 'Open menu (drag to move)' : 'Hide menu (drag to move)'}
-        style={{
-          position: 'fixed',
-          top: notchY,
-          left: collapsed ? 0 : RAIL_W,
-          zIndex: 51,
-          width: 22, height: NOTCH_H,
-          padding: 0,
-          alignItems: 'center', justifyContent: 'center',
-          background: 'var(--green)', color: '#FBF8F2',
-          border: 'none',
-          borderRadius: collapsed ? '0 14px 14px 0' : '0 12px 12px 0',
-          boxShadow: '0 4px 14px rgba(59,83,35,0.28)',
-          cursor: 'grab',
-          touchAction: 'none',
-          transition: 'left 0.22s ease, border-radius 0.22s ease',
-        }}
-      >
-        <span style={{
-          display: 'inline-flex',
-          transform: collapsed ? 'none' : 'rotate(180deg)',
-          transition: 'transform 0.22s ease',
-        }}>
-          <Icon.ChevronRight size={15} stroke="#FBF8F2" />
-        </span>
-      </button>
+      {/* ── Desktop: always-visible floating pill ── */}
+      <aside className="idana-pill hidden md:flex">
+        <Link href="/" className="idana-pill-glyph" title="IDANA — Home">
+          <IDANAGlyph size={26} color="var(--green)" />
+        </Link>
 
-      {/* ── Desktop sidebar (expanded rail) ── */}
-      <aside className="hidden md:flex" style={{
-        width: RAIL_W, minHeight: '100vh',
-        background: 'var(--bg)', borderRight: '1px solid var(--line)',
-        flexDirection: 'column', alignItems: 'center',
-        padding: '22px 0 18px', gap: 6,
-        position: 'fixed', left: collapsed ? -RAIL_W - 1 : 0, top: 0, bottom: 0, zIndex: 50,
-        transition: 'left 0.22s ease',
-      }}>
-        <div style={{ marginBottom: 14, cursor: 'pointer' }}>
-          <IDANAGlyph size={32} color="var(--green)" />
-        </div>
+        <div className="idana-pill-divider" />
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+        <nav className="idana-pill-nav">
           {NAV.map(({ href, label, iconKey }) => {
             const active = isActive(href)
             const NavIcon = Icon[iconKey]
             return (
-              <Link key={href} href={href} title={label} style={{
-                width: 56, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                padding: '10px 0 8px', borderRadius: 12, textDecoration: 'none',
-                color: active ? 'var(--green)' : 'var(--muted)',
-                background: active ? 'var(--tier-strong-tint-soft)' : 'transparent',
-                transition: 'all 0.15s ease',
-              }}>
-                <NavIcon size={22} stroke={active ? 'var(--green)' : 'var(--muted)'} />
-                <span style={{ fontSize: 10.5, fontWeight: 500, color: active ? 'var(--green)' : 'var(--muted)' }}>
-                  {label}
-                </span>
+              <Link
+                key={href}
+                href={href}
+                title={label}
+                className={`idana-pill-item ${active ? 'is-active' : ''}`}
+              >
+                <NavIcon size={21} stroke={active ? 'var(--green)' : 'var(--muted)'} />
+                <span className="idana-pill-label">{label}</span>
               </Link>
             )
           })}
         </nav>
 
-        <button onClick={toggleTheme} title="Toggle theme" style={{
-          width: 36, height: 36, borderRadius: '50%',
-          background: 'transparent', border: '1px solid var(--line)',
-          color: 'var(--muted)', cursor: 'pointer', display: 'grid', placeItems: 'center',
-        }}>
+        <div className="idana-pill-divider" />
+
+        <button onClick={toggleTheme} title="Toggle theme" className="idana-pill-theme">
           <span suppressHydrationWarning>
-            {theme === 'light' ? <MoonIcon size={18} /> : <SunIcon size={18} />}
+            {theme === 'light' ? <MoonIcon size={17} /> : <SunIcon size={17} />}
           </span>
         </button>
 
-        <button onClick={() => setShowModal(true)} title="New session" style={{
-          marginTop: 8, width: 44, height: 44, borderRadius: '50%',
-          background: 'var(--green)', color: '#FBF8F2',
-          border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 8px 22px rgba(59,83,35,0.35)', transition: 'transform 0.15s ease',
-        }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px) scale(1.04)' }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'none' }}
-        >
-          <Icon.Plus size={20} stroke="#FBF8F2" />
+        <button onClick={() => setShowModal(true)} title="New session" className="idana-pill-new">
+          <Icon.Plus size={19} stroke="#FBF8F2" />
         </button>
       </aside>
 
@@ -249,6 +141,69 @@ export default function Sidebar() {
           onClose={() => setShowModal(false)}
         />
       )}
+
+      <style>{`
+        .idana-pill {
+          position: fixed;
+          left: 14px;
+          top: 50%;
+          transform: translateY(-50%);
+          z-index: 50;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
+          padding: 12px 8px;
+          background: var(--card);
+          border: 1px solid var(--line);
+          border-radius: 30px;
+          box-shadow: 0 12px 32px rgba(28,26,23,0.16);
+        }
+        .idana-pill-glyph {
+          display: flex; align-items: center; justify-content: center;
+          width: 40px; height: 40px; border-radius: 50%;
+          text-decoration: none;
+        }
+        .idana-pill-divider {
+          width: 26px; height: 1px; background: var(--line);
+        }
+        .idana-pill-nav {
+          display: flex; flex-direction: column; gap: 3px;
+        }
+        .idana-pill-item {
+          width: 52px;
+          display: flex; flex-direction: column; align-items: center; gap: 3px;
+          padding: 9px 0 7px;
+          border-radius: 15px;
+          text-decoration: none;
+          color: var(--muted);
+          transition: background 0.15s ease, color 0.15s ease;
+        }
+        .idana-pill-item:hover { background: var(--bg-2); }
+        .idana-pill-item.is-active { background: var(--green-soft); color: var(--green); }
+        .idana-pill-label {
+          font-size: 10px; font-weight: 500; line-height: 1;
+          color: inherit;
+        }
+        .idana-pill-item .idana-pill-label { color: var(--muted); }
+        .idana-pill-item.is-active .idana-pill-label { color: var(--green); }
+        .idana-pill-theme {
+          width: 36px; height: 36px; border-radius: 50%;
+          background: transparent; border: 1px solid var(--line);
+          color: var(--muted); cursor: pointer;
+          display: grid; place-items: center;
+          transition: background 0.15s ease;
+        }
+        .idana-pill-theme:hover { background: var(--bg-2); }
+        .idana-pill-new {
+          width: 44px; height: 44px; border-radius: 50%;
+          background: var(--green); color: #FBF8F2;
+          border: none; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 8px 22px rgba(59,83,35,0.35);
+          transition: transform 0.15s ease;
+        }
+        .idana-pill-new:hover { transform: translateY(-1px) scale(1.04); }
+      `}</style>
     </>
   )
 }
