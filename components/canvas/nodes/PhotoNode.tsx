@@ -1,8 +1,44 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { Handle, Position, type NodeProps, NodeResizer } from '@xyflow/react'
+import { Handle, Position, type NodeProps, NodeResizer, useReactFlow } from '@xyflow/react'
 import { createPortal } from 'react-dom'
+
+// Downscale + re-encode an uploaded image so we never persist a multi-megabyte
+// data URL. Large phone photos otherwise blow past the request-body size limit
+// and the canvas autosave POST fails.
+function downscaleImage(file: File, maxDim = 1400, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      const img = new Image()
+      img.onload = () => {
+        let { width, height } = img
+        if (Math.max(width, height) > maxDim) {
+          const scale = maxDim / Math.max(width, height)
+          width = Math.round(width * scale)
+          height = Math.round(height * scale)
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { resolve(dataUrl); return }
+        ctx.drawImage(img, 0, 0, width, height)
+        try {
+          resolve(canvas.toDataURL('image/jpeg', quality))
+        } catch {
+          resolve(dataUrl)
+        }
+      }
+      img.onerror = reject
+      img.src = dataUrl
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
 
 interface PhotoData {
   label: string
@@ -12,8 +48,9 @@ interface PhotoData {
   [key: string]: unknown
 }
 
-export default function PhotoNode({ data, selected }: NodeProps) {
+export default function PhotoNode({ id, data, selected }: NodeProps) {
   const nodeData = data as PhotoData
+  const { updateNodeData } = useReactFlow()
   const [src, setSrc] = useState<string | null>(nodeData.src)
   const [caption, setCaption] = useState(nodeData.caption || '')
   const [editingCaption, setEditingCaption] = useState(false)
@@ -22,16 +59,22 @@ export default function PhotoNode({ data, selected }: NodeProps) {
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const commitCaption = useCallback(() => {
+    setEditingCaption(false)
+    updateNodeData(id, { caption })
+  }, [id, caption, updateNodeData])
+
   const loadFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) return
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const result = e.target?.result as string
-      setSrc(result)
-      nodeData.src = result
-    }
-    reader.readAsDataURL(file)
-  }, [nodeData])
+    downscaleImage(file)
+      .then((url) => {
+        setSrc(url)
+        // Persist through React Flow so the nodes array updates and the
+        // debounced autosave actually fires (a direct data mutation would not).
+        updateNodeData(id, { src: url })
+      })
+      .catch(() => { /* ignore unreadable files */ })
+  }, [id, updateNodeData])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -131,15 +174,9 @@ export default function PhotoNode({ data, selected }: NodeProps) {
                 value={caption}
                 autoFocus
                 onChange={(e) => setCaption(e.target.value)}
-                onBlur={() => {
-                  setEditingCaption(false)
-                  nodeData.caption = caption
-                }}
+                onBlur={commitCaption}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === 'Escape') {
-                    setEditingCaption(false)
-                    nodeData.caption = caption
-                  }
+                  if (e.key === 'Enter' || e.key === 'Escape') commitCaption()
                 }}
                 placeholder="Add a caption..."
               />

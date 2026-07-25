@@ -50,6 +50,11 @@ const nodeTypes: NodeTypes = {
 const initialNodes: Node[] = []
 const initialEdges: Edge[] = []
 
+function nodeIdFromEvent(target: EventTarget | null): string | null {
+  const el = (target as HTMLElement | null)?.closest?.('.react-flow__node') as HTMLElement | null
+  return el?.getAttribute('data-id') ?? null
+}
+
 interface SessionCanvasProps {
   sessionId: string
   sessionTitle: string
@@ -62,8 +67,10 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [minimapVisible, setMinimapVisible] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
+  const [nodeMenu, setNodeMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const { screenToFlowPosition } = useReactFlow()
   const spawnPairingRef = useRef<((ingredientName: string, sourceNodeId: string) => void) | null>(null)
+  const longPress = useRef<{ timer: ReturnType<typeof setTimeout> | null; x: number; y: number }>({ timer: null, x: 0, y: 0 })
 
   const { saveStatus, lastSaved, saveNow, versions, restoreVersion } = useCanvasPersistence({
     sessionId,
@@ -243,6 +250,45 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
   )
   spawnPairingRef.current = spawnPairingNode
 
+  // ── Long-press (and right-click) a node → delete menu ──
+  const clearLongPress = useCallback(() => {
+    if (longPress.current.timer) { clearTimeout(longPress.current.timer); longPress.current.timer = null }
+  }, [])
+
+  const onFlowPointerDown = useCallback((e: React.PointerEvent) => {
+    // Don't hijack presses on interactive controls inside a node.
+    const t = e.target as HTMLElement
+    if (t.closest('input, textarea, button, select, [contenteditable="true"]')) return
+    const id = nodeIdFromEvent(e.target)
+    if (!id) return
+    clearLongPress()
+    longPress.current.x = e.clientX
+    longPress.current.y = e.clientY
+    longPress.current.timer = setTimeout(() => {
+      setNodeMenu({ id, x: e.clientX, y: e.clientY })
+    }, 500)
+  }, [clearLongPress])
+
+  const onFlowPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!longPress.current.timer) return
+    if (Math.abs(e.clientX - longPress.current.x) > 6 || Math.abs(e.clientY - longPress.current.y) > 6) {
+      clearLongPress()
+    }
+  }, [clearLongPress])
+
+  const onFlowContextMenu = useCallback((e: React.MouseEvent) => {
+    const id = nodeIdFromEvent(e.target)
+    if (!id) return
+    e.preventDefault()
+    setNodeMenu({ id, x: e.clientX, y: e.clientY })
+  }, [])
+
+  const deleteNode = useCallback((id: string) => {
+    setNodes(nds => nds.filter(n => n.id !== id))
+    setEdges(eds => eds.filter(e => e.source !== id && e.target !== id))
+    setNodeMenu(null)
+  }, [setNodes, setEdges])
+
   return (
     <div className="idana-canvas-root">
       <CanvasTopBar
@@ -263,7 +309,15 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
         }
       />
 
-      <div className="idana-canvas-flow">
+      <div
+        className="idana-canvas-flow"
+        onPointerDownCapture={onFlowPointerDown}
+        onPointerMoveCapture={onFlowPointerMove}
+        onPointerUpCapture={clearLongPress}
+        onPointerCancelCapture={clearLongPress}
+        onPointerLeave={clearLongPress}
+        onContextMenu={onFlowContextMenu}
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -309,6 +363,24 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
       </div>
 
       <CanvasToolbar onSpawn={spawnNode} />
+
+      {nodeMenu && (
+        <>
+          <div className="idana-nodemenu-backdrop" onClick={() => setNodeMenu(null)} />
+          <div
+            className="idana-nodemenu"
+            style={{ left: nodeMenu.x, top: nodeMenu.y }}
+            role="menu"
+          >
+            <button
+              className="idana-nodemenu-item idana-nodemenu-item--danger"
+              onClick={() => deleteNode(nodeMenu.id)}
+            >
+              <span aria-hidden>🗑</span> Delete node
+            </button>
+          </div>
+        </>
+      )}
 
       <style>{`
         .idana-canvas-root {
@@ -370,6 +442,49 @@ function CanvasInner({ sessionId, sessionTitle, onTitleChange, onBack }: Session
           bottom: 96px !important;
           right: 16px !important;
         }
+
+        .idana-nodemenu-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 199;
+        }
+
+        .idana-nodemenu {
+          position: fixed;
+          z-index: 200;
+          transform: translate(-8px, 6px);
+          min-width: 150px;
+          padding: 5px;
+          background: var(--idana-cream, #F2EBD9);
+          border: 1px solid var(--idana-ash, #C4B9A8);
+          border-radius: 12px;
+          box-shadow: 0 12px 32px rgba(28,26,23,0.22);
+          animation: idana-nodemenu-in 0.12s ease;
+        }
+
+        @keyframes idana-nodemenu-in {
+          from { opacity: 0; transform: translate(-8px, 0) scale(0.96); }
+          to   { opacity: 1; transform: translate(-8px, 6px) scale(1); }
+        }
+
+        .idana-nodemenu-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: 100%;
+          padding: 9px 12px;
+          border: none;
+          background: transparent;
+          border-radius: 8px;
+          font-family: inherit;
+          font-size: 13px;
+          text-align: left;
+          cursor: pointer;
+          color: var(--idana-charcoal, #1C1A17);
+        }
+
+        .idana-nodemenu-item--danger { color: #C0394B; }
+        .idana-nodemenu-item--danger:hover { background: rgba(192,57,75,0.10); }
       `}</style>
     </div>
   )
