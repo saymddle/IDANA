@@ -549,7 +549,7 @@ export default function PairingGraph({
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
       <style>{BREATHE_CSS}</style>
 
-      <div ref={wrapRef} style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+      <div ref={wrapRef} style={{ flex: 1, position: 'relative', minHeight: 0, overflow: 'hidden', borderRadius: 20 }}>
 
         {/* Background */}
         <div style={{ position: 'absolute', inset: 0, background: 'var(--bg-deep)', borderRadius: 20, overflow: 'hidden' }}>

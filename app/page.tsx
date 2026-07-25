@@ -198,7 +198,7 @@ export default function HomePage() {
         .hm-result-name { font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-weight: 500; font-size: 36px; color: #1C1A17; margin: 0; }
         .hm-pair-count { font-size: 13px; color: #9A8F80; }
         .hm-result-sub { font-size: 13px; color: #6B5D50; margin: 0 0 18px; }
-        .hm-graph-card { height: 380px; background: #1C1A17; border: 1px solid #3D2B1F; border-radius: 16px; padding: 10px; margin-bottom: 46px; }
+        .hm-graph-card { height: min(64vh, 560px); background: #1C1A17; border: 1px solid #3D2B1F; border-radius: 16px; padding: 10px; margin-bottom: 46px; overflow: hidden; }
 
         .hm-recent-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; border-top: 1px solid #E4DAC6; padding-top: 26px; }
         .hm-recent-title { font-family: 'Playfair Display', Georgia, serif; font-weight: 500; font-size: 19px; color: #1C1A17; margin: 0; }
